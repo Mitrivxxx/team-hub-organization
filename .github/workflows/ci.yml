@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - stage
+      - main
+  pull_request:
+    branches:
+      - stage
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  # Monorepo holding building-blocks + ServiceDefaults (ProjectReference paths).
+  MONOREPO: Mitrivxxx/team-hub
+  MONOREPO_REF: main
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MONOREPO }}
+          ref: ${{ env.MONOREPO_REF }}
+          path: team-hub
+
+      - name: Checkout team
+        uses: actions/checkout@v4
+        with:
+          path: team-hub/services/team-hub-team
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            team-hub/services/team-hub-team/team-hub-team/team-hub-team.csproj
+            team-hub/services/team-hub-team/team-hub-team.Tests/team-hub-team.Tests.csproj
+
+      - name: Restore
+        working-directory: team-hub/services/team-hub-team
+        run: dotnet restore team-hub-team.sln
+
+      - name: Build
+        working-directory: team-hub/services/team-hub-team
+        run: dotnet build team-hub-team.sln --configuration Release --no-restore
+
+      - name: Test
+        working-directory: team-hub/services/team-hub-team
+        run: dotnet test team-hub-team.sln --configuration Release --no-build --verbosity normal
+
+  publish:
+    name: Publish image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MONOREPO }}
+          ref: ${{ env.MONOREPO_REF }}
+          path: team-hub
+
+      - name: Checkout team
+        uses: actions/checkout@v4
+        with:
+          path: team-hub/services/team-hub-team
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: team-hub
+          file: team-hub/services/team-hub-team/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
