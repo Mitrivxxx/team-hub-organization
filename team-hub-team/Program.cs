@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Host.AddTeamHubSerilog();
 
-builder.Services.AddTeamHubOpenTelemetry(builder.Configuration, "team-hub-team");
+builder.Services.AddTeamHubOpenTelemetry(builder.Configuration, "team-hub-organization");
 builder.Services.AddHealthChecks();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

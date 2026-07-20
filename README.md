@@ -1,1 +1,1 @@
-# team-hub-team
+# team-hub-organization

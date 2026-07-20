@@ -37,7 +37,7 @@ jobs:
       - name: Checkout team
         uses: actions/checkout@v4
         with:
-          path: team-hub/services/team-hub-team
+          path: team-hub/services/team-hub-organization
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -45,19 +45,19 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
           cache: true
           cache-dependency-path: |
-            team-hub/services/team-hub-team/team-hub-team/team-hub-team.csproj
-            team-hub/services/team-hub-team/team-hub-team.Tests/team-hub-team.Tests.csproj
+            team-hub/services/team-hub-organization/team-hub-team/team-hub-team.csproj
+            team-hub/services/team-hub-organization/team-hub-team.Tests/team-hub-team.Tests.csproj
 
       - name: Restore
-        working-directory: team-hub/services/team-hub-team
+        working-directory: team-hub/services/team-hub-organization
         run: dotnet restore team-hub-team.sln
 
       - name: Build
-        working-directory: team-hub/services/team-hub-team
+        working-directory: team-hub/services/team-hub-organization
         run: dotnet build team-hub-team.sln --configuration Release --no-restore
 
       - name: Test
-        working-directory: team-hub/services/team-hub-team
+        working-directory: team-hub/services/team-hub-organization
         run: dotnet test team-hub-team.sln --configuration Release --no-build --verbosity normal
 
   publish:
@@ -81,7 +81,7 @@ jobs:
       - name: Checkout team
         uses: actions/checkout@v4
         with:
-          path: team-hub/services/team-hub-team
+          path: team-hub/services/team-hub-organization
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -106,7 +106,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: team-hub
-          file: team-hub/services/team-hub-team/Dockerfile
+          file: team-hub/services/team-hub-organization/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

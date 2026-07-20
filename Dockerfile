@@ -3,13 +3,13 @@ WORKDIR /src
 
 COPY aspire/TeamHub.ServiceDefaults/TeamHub.ServiceDefaults.csproj aspire/TeamHub.ServiceDefaults/
 COPY building-blocks/TeamHub.Observability/TeamHub.Observability.csproj building-blocks/TeamHub.Observability/
-COPY services/team-hub-team/team-hub-team/team-hub-team.csproj services/team-hub-team/team-hub-team/
-RUN dotnet restore services/team-hub-team/team-hub-team/team-hub-team.csproj
+COPY services/team-hub-organization/team-hub-team/team-hub-team.csproj services/team-hub-organization/team-hub-team/
+RUN dotnet restore services/team-hub-organization/team-hub-team/team-hub-team.csproj
 
 COPY aspire/TeamHub.ServiceDefaults/ aspire/TeamHub.ServiceDefaults/
 COPY building-blocks/TeamHub.Observability/ building-blocks/TeamHub.Observability/
-COPY services/team-hub-team/team-hub-team/ services/team-hub-team/team-hub-team/
-RUN dotnet publish services/team-hub-team/team-hub-team/team-hub-team.csproj -c Release -o /app/publish
+COPY services/team-hub-organization/team-hub-team/ services/team-hub-organization/team-hub-team/
+RUN dotnet publish services/team-hub-organization/team-hub-team/team-hub-team.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 RUN apt-get update \
