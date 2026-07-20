@@ -1,7 +1,7 @@
 using Serilog;
 using Serilog.Events;
 
-namespace team_hub_team.Configuration;
+namespace team_hub_organization.Configuration;
 
 public static class SerilogRequestLoggingExtensions
 {

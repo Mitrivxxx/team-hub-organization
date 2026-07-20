@@ -45,20 +45,20 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
           cache: true
           cache-dependency-path: |
-            team-hub/services/team-hub-organization/team-hub-team/team-hub-team.csproj
-            team-hub/services/team-hub-organization/team-hub-team.Tests/team-hub-team.Tests.csproj
+            team-hub/services/team-hub-organization/team-hub-organization/team-hub-organization.csproj
+            team-hub/services/team-hub-organization/team-hub-organization.Tests/team-hub-organization.Tests.csproj
 
       - name: Restore
         working-directory: team-hub/services/team-hub-organization
-        run: dotnet restore team-hub-team.sln
+        run: dotnet restore team-hub-organization.sln
 
       - name: Build
         working-directory: team-hub/services/team-hub-organization
-        run: dotnet build team-hub-team.sln --configuration Release --no-restore
+        run: dotnet build team-hub-organization.sln --configuration Release --no-restore
 
       - name: Test
         working-directory: team-hub/services/team-hub-organization
-        run: dotnet test team-hub-team.sln --configuration Release --no-build --verbosity normal
+        run: dotnet test team-hub-organization.sln --configuration Release --no-build --verbosity normal
 
   publish:
     name: Publish image

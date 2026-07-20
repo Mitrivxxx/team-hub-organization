@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "team-hub-team", "team-hub-team\team-hub-team.csproj", "{F8F87392-DF4E-4F1C-A9DD-31BC35DC25CE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "team-hub-organization", "team-hub-organization\team-hub-organization.csproj", "{F8F87392-DF4E-4F1C-A9DD-31BC35DC25CE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "team-hub-team.Tests", "team-hub-team.Tests\team-hub-team.Tests.csproj", "{0C9D71CB-F820-4D71-AA47-5FC7B9078E94}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "team-hub-organization.Tests", "team-hub-organization.Tests\team-hub-organization.Tests.csproj", "{0C9D71CB-F820-4D71-AA47-5FC7B9078E94}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

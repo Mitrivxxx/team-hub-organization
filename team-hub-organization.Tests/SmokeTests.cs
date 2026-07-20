@@ -1,13 +1,13 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 
-namespace team_hub_team.Tests;
+namespace team_hub_organization.Tests;
 
-public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
+public class SmokeTests : IClassFixture<TestOrganizationWebApplicationFactory>
 {
     readonly HttpClient _client;
 
-    public SmokeTests(WebApplicationFactory<Program> factory)
+    public SmokeTests(TestOrganizationWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
     }

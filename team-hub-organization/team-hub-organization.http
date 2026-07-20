@@ -1,0 +1,6 @@
+@team_hub_organization_HostAddress = http://localhost:5002
+
+GET {{team_hub_organization_HostAddress}}/health
+Accept: application/json
+
+###

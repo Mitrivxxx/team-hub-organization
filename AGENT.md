@@ -2,7 +2,10 @@
 - Organization microservice skeleton (Web API) for Team Hub.
 
 ## Source of truth
-- `team-hub-team/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
+- `team-hub-organization/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
+- `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
+- `team-hub-organization/Migrations/*` (schema)
+- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`)
 - `aspire/TeamHub.ServiceDefaults/Extensions.cs`
 - `building-blocks/TeamHub.Observability/`
 
@@ -16,6 +19,11 @@
 - Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
 - Docker healthcheck interval: `120s` (`docker-compose.yml` + `Dockerfile`).
 - Keep this file updated after API, port, or observability changes.
+- Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup).
+- Connection string:
+  - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db`
+  - docker prod compose: `Database=organizationdb`
+- Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers.
 
 ## CI (GitHub Actions)
 - Workflow: `.github/workflows/ci.yml`.

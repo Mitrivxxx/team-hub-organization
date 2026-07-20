@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Serilog.Context;
 
-namespace team_hub_team.Configuration;
+namespace team_hub_organization.Configuration;
 
 public sealed class CorrelationIdMiddleware(RequestDelegate next)
 {
