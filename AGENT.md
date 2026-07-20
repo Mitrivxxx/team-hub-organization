@@ -1,20 +1,32 @@
 ## Purpose
-- Organization microservice skeleton (Web API) for Team Hub.
+- Organization microservice for Team Hub (organizations, teams, memberships, invitations).
 
 ## Source of truth
 - `team-hub-organization/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
 - `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
 - `team-hub-organization/Migrations/*` (schema)
-- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`)
+- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`)
 - `aspire/TeamHub.ServiceDefaults/Extensions.cs`
 - `building-blocks/TeamHub.Observability/`
 
 ## Do
-- Endpoints: `GET /health`, `GET /metrics` (Prometheus). Controllers folder ready for domain APIs.
+- Endpoints:
+  - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
+  - `GET /metrics` — Prometheus metrics
+  - `POST /api/team/organizations` — create org + creator as Owner member (`201`, `409` slug conflict)
+  - `GET /api/team/organizations` — list current user organizations
+  - `GET /api/team/organizations/{orgId}` — organization details (member only)
+  - `GET /api/team/organizations/by-slug/{slug}` — lookup by slug (member only)
+  - `PATCH /api/team/organizations/{orgId}` — update `name`, `avatarUrl` (slug unchanged)
+  - `DELETE /api/team/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
 - Flow: frontend -> infrastructure nginx -> gateway `/api/team/{**catch-all}` -> this service.
+- Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`.
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
 - Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); exclude `/health` and `/metrics` from Serilog request logging.
-- Keep `CorrelationIdMiddleware` before request logging (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
+- Keep `ExceptionMiddleware` as the first middleware (RFC 7807 `ProblemDetails`).
+- Keep `CorrelationIdMiddleware` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
+- Keep `UserIdLoggingMiddleware` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
+- Swagger: Development only; XML summaries on controller actions.
 - Dev Env: HTTP only on port `5002` (`launchSettings.json`).
 - Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
 - Docker healthcheck interval: `120s` (`docker-compose.yml` + `Dockerfile`).
@@ -23,6 +35,7 @@
 - Connection string:
   - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db`
   - docker prod compose: `Database=organizationdb`
+- Postgres container `postgres-dev` (dev) and `postgres-prod` (prod) create both auth and organization databases via init script `infrastructure/postgres/init/01-create-dbs-{dev|prod}.sql` mounted at `/docker-entrypoint-initdb.d/`.
 - Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers.
 
 ## CI (GitHub Actions)

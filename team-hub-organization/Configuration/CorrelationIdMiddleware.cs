@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Serilog.Context;
 
 namespace team_hub_organization.Configuration;
 
@@ -10,22 +9,17 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var traceId = Activity.Current?.TraceId.ToString();
-        var incomingHeaderValue = context.Request.Headers[HeaderName].FirstOrDefault();
-        var correlationId =
-            !string.IsNullOrWhiteSpace(traceId)
-                ? traceId
-                : !string.IsNullOrWhiteSpace(incomingHeaderValue)
-                    ? incomingHeaderValue
-                    : Guid.NewGuid().ToString("N");
+        var correlationId = Activity.Current?.TraceId.ToString()
+            ?? context.Request.Headers[HeaderName].FirstOrDefault()
+            ?? Guid.NewGuid().ToString("N");
 
-        context.Request.Headers[HeaderName] = correlationId;
         context.Items[ItemKey] = correlationId;
-        context.Response.Headers.Append(HeaderName, correlationId);
-
-        using (LogContext.PushProperty(ItemKey, correlationId))
+        context.Response.OnStarting(() =>
         {
-            await next(context);
-        }
+            context.Response.Headers[HeaderName] = correlationId;
+            return Task.CompletedTask;
+        });
+
+        await next(context);
     }
 }

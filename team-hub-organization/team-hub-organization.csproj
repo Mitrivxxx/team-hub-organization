@@ -5,11 +5,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>team_hub_organization</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.27" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
       <PrivateAssets>all</PrivateAssets>

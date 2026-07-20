@@ -1,6 +1,53 @@
 @team_hub_organization_HostAddress = http://localhost:5002
+@accessToken = {{login.response.body.accessToken}}
 
+# Health
 GET {{team_hub_organization_HostAddress}}/health
 Accept: application/json
+
+###
+
+# Organizations
+POST {{team_hub_organization_HostAddress}}/api/team/organizations
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Acme Corp"
+}
+
+###
+
+GET {{team_hub_organization_HostAddress}}/api/team/organizations
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###
+
+GET {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###
+
+GET {{team_hub_organization_HostAddress}}/api/team/organizations/by-slug/acme-corp
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###
+
+PATCH {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Acme Corporation",
+  "avatarUrl": "https://cdn.example/avatar.png"
+}
+
+###
+
+DELETE {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+Authorization: Bearer {{accessToken}}
 
 ###

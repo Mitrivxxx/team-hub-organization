@@ -4,7 +4,13 @@ public static class WebApplicationExtensions
 {
     public static WebApplication UseApiPipeline(this WebApplication app)
     {
+        app.UseMiddleware<ExceptionMiddleware>();
         app.UseMiddleware<CorrelationIdMiddleware>();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseMiddleware<UserIdLoggingMiddleware>();
         app.UseSerilogRequestLoggingExcludingHealth();
 
         if (app.Environment.IsDevelopment())
@@ -15,6 +21,7 @@ public static class WebApplicationExtensions
 
         app.MapHealthChecks("/health");
         app.MapControllers();
+
         return app;
     }
 }
