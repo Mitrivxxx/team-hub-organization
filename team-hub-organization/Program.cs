@@ -17,7 +17,7 @@ builder.Services.AddOrganizationHealthChecks(builder.Configuration);
 builder.Services.AddJwtConfiguration(builder.Configuration);
 builder.Services.AddApiInfrastructure();
 builder.Services.AddValidation();
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(builder.Configuration);
 
 var app = builder.Build();
 

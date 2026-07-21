@@ -6,7 +6,7 @@ namespace team_hub_organization.Controllers;
 
 public partial class OrganizationsController
 {
-    /// <summary>Update organization name and avatar URL.</summary>
+    /// <summary>Update organization name.</summary>
     [HttpPatch("{orgId:guid}")]
     [ProducesResponseType(typeof(OrganizationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

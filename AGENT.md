@@ -5,9 +5,10 @@
 - `team-hub-organization/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
 - `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
 - `team-hub-organization/Migrations/*` (schema)
-- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`)
+- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`, `BlobStorage:*` dev)
 - `aspire/TeamHub.ServiceDefaults/Extensions.cs`
 - `building-blocks/TeamHub.Observability/`
+- `building-blocks/TeamHub.BlobStorage/` (dev avatar storage)
 
 ## Do
 - Endpoints:
@@ -17,7 +18,9 @@
   - `GET /api/team/organizations` — list current user organizations
   - `GET /api/team/organizations/{orgId}` — organization details (member only)
   - `GET /api/team/organizations/by-slug/{slug}` — lookup by slug (member only)
-  - `PATCH /api/team/organizations/{orgId}` — update `name`, `avatarUrl` (slug unchanged)
+  - `PATCH /api/team/organizations/{orgId}` — update `name` (slug unchanged)
+  - `PUT /api/team/organizations/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
+  - `DELETE /api/team/organizations/{orgId}/avatar` — remove avatar (member-only)
   - `DELETE /api/team/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
 - Flow: frontend -> infrastructure nginx -> gateway `/api/team/{**catch-all}` -> this service.
 - Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`.
@@ -37,6 +40,8 @@
   - docker prod compose: `Database=organizationdb`
 - Postgres container `postgres-dev` (dev) and `postgres-prod` (prod) create both auth and organization databases via init script `infrastructure/postgres/init/01-create-dbs-{dev|prod}.sql` mounted at `/docker-entrypoint-initdb.d/`.
 - Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers.
+- Dev avatar storage: Azurite via `docker-compose.dev.yml` or Aspire (`BlobStorage__ConnectionString`, `BlobStorage__PublicBlobEndpoint`); `avatarUrl` in API responses is a read-only SAS URL; DB stores internal blob path.
+- Avatar upload/delete returns `503` when blob storage is not configured (prod compose has no Azurite by design).
 
 ## CI (GitHub Actions)
 - Workflow: `.github/workflows/ci.yml`.

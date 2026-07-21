@@ -10,5 +10,6 @@ namespace team_hub_organization.Controllers;
 [Authorize]
 public partial class OrganizationsController(
     IOrganizationService organizationService,
+    IOrganizationAvatarService organizationAvatarService,
     ICurrentUserService currentUserService,
     ILogger<OrganizationsController> logger) : ControllerBase;

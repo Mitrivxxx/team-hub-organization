@@ -11,9 +11,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Tests.Configuration;
+using team_hub_organization.Tests.Controllers;
 
 namespace team_hub_organization.Tests;
 
@@ -37,6 +39,8 @@ public sealed class TestOrganizationWebApplicationFactory : WebApplicationFactor
 
             services.Configure<HealthCheckServiceOptions>(options => options.Registrations.Clear());
             services.AddHealthChecks();
+            services.RemoveAll<IBlobStorageService>();
+            services.AddSingleton<IBlobStorageService, FakeBlobStorageService>();
         });
     }
 

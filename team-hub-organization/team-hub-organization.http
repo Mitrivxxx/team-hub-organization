@@ -41,9 +41,26 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "name": "Acme Corporation",
-  "avatarUrl": "https://cdn.example/avatar.png"
+  "name": "Acme Corporation"
 }
+
+###
+
+PUT {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}/avatar
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----AvatarBoundary
+
+------AvatarBoundary
+Content-Disposition: form-data; name="file"; filename="avatar.png"
+Content-Type: image/png
+
+< ./avatar.png
+------AvatarBoundary--
+
+###
+
+DELETE {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}/avatar
+Authorization: Bearer {{accessToken}}
 
 ###
 

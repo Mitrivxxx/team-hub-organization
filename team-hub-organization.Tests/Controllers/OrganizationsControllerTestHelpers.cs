@@ -4,7 +4,9 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using TeamHub.BlobStorage;
 using team_hub_organization.Controllers;
 using team_hub_organization.Data;
 using team_hub_organization.Models;
@@ -29,7 +31,9 @@ internal static class OrganizationsControllerTestHelpers
     public static OrganizationsController CreateController(
         OrganizationDbContext db,
         Guid userId,
-        IOrganizationService? organizationService = null)
+        IOrganizationService? organizationService = null,
+        IOrganizationAvatarService? organizationAvatarService = null,
+        IBlobStorageService? blobStorageService = null)
     {
         var httpContext = new DefaultHttpContext
         {
@@ -37,15 +41,33 @@ internal static class OrganizationsControllerTestHelpers
         };
 
         var currentUserService = new TestCurrentUserService(userId);
-        organizationService ??= new OrganizationService(db);
+        organizationService ??= CreateOrganizationService(db, blobStorageService);
+        organizationAvatarService ??= CreateAvatarService(db, blobStorageService);
 
-        return new OrganizationsController(organizationService, currentUserService, NullLogger<OrganizationsController>.Instance)
+        return new OrganizationsController(organizationService, organizationAvatarService, currentUserService, NullLogger<OrganizationsController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = httpContext
             }
         };
+    }
+
+    public static OrganizationService CreateOrganizationService(
+        OrganizationDbContext db,
+        IBlobStorageService? blobStorageService = null) =>
+        new(db, CreateServiceProvider(blobStorageService));
+
+    public static IOrganizationAvatarService CreateAvatarService(
+        OrganizationDbContext db,
+        IBlobStorageService? blobStorageService = null) =>
+        new OrganizationAvatarService(db, CreateServiceProvider(blobStorageService));
+
+    static IServiceProvider CreateServiceProvider(IBlobStorageService? blobStorageService = null)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(blobStorageService ?? new FakeBlobStorageService());
+        return services.BuildServiceProvider();
     }
 
     public static ClaimsPrincipal CreatePrincipal(Guid userId)

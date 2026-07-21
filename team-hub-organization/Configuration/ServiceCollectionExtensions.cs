@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Organizations;
@@ -111,11 +112,13 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddTeamHubBlobStorage(configuration);
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
+        services.AddScoped<IOrganizationAvatarService, OrganizationAvatarService>();
         return services;
     }
 }

@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 
 namespace team_hub_organization.Services.Organizations;
 
-public sealed class OrganizationService(OrganizationDbContext db) : IOrganizationService
+public sealed class OrganizationService(OrganizationDbContext db, IServiceProvider serviceProvider) : IOrganizationService
 {
     public const string OwnerRoleName = "Owner";
+
+    IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
 
     public async Task<OrganizationResponse> CreateAsync(CreateOrganizationRequest request, Guid userId, CancellationToken cancellationToken = default)
     {
@@ -90,7 +93,7 @@ public sealed class OrganizationService(OrganizationDbContext db) : IOrganizatio
 
     public async Task<IReadOnlyList<OrganizationResponse>> ListForUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        return await db.OrganizationMembers
+        var organizations = await db.OrganizationMembers
             .AsNoTracking()
             .Where(m => m.UserId == userId)
             .Join(
@@ -99,16 +102,9 @@ public sealed class OrganizationService(OrganizationDbContext db) : IOrganizatio
                 organization => organization.Id,
                 (_, organization) => organization)
             .OrderBy(o => o.Name)
-            .Select(o => new OrganizationResponse
-            {
-                Id = o.Id,
-                Name = o.Name,
-                Slug = o.Slug,
-                AvatarUrl = o.AvatarUrl,
-                CreatedAt = o.CreatedAt,
-                UpdatedAt = o.UpdatedAt
-            })
             .ToListAsync(cancellationToken);
+
+        return organizations.Select(ToResponse).ToList();
     }
 
     public async Task<OrganizationResponse?> GetByIdAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
@@ -156,9 +152,6 @@ public sealed class OrganizationService(OrganizationDbContext db) : IOrganizatio
         if (!string.IsNullOrWhiteSpace(request.Name))
             organization.Name = request.Name.Trim();
 
-        if (request.AvatarUrl is not null)
-            organization.AvatarUrl = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
-
         organization.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -201,12 +194,12 @@ public sealed class OrganizationService(OrganizationDbContext db) : IOrganizatio
                      && x.role.Scope == RoleScope.Org,
                 cancellationToken);
 
-    static OrganizationResponse ToResponse(Organization organization) => new()
+    OrganizationResponse ToResponse(Organization organization) => new()
     {
         Id = organization.Id,
         Name = organization.Name,
         Slug = organization.Slug,
-        AvatarUrl = organization.AvatarUrl,
+        AvatarUrl = OrganizationAvatarService.ResolveAvatarUrl(organization.AvatarUrl, BlobStorage),
         CreatedAt = organization.CreatedAt,
         UpdatedAt = organization.UpdatedAt
     };

@@ -7,7 +7,7 @@ namespace team_hub_organization.Tests.Controllers;
 public class OrganizationsControllerUpdateTests
 {
     [Fact]
-    public async Task Update_WhenUserIsMember_ShouldUpdateNameAndAvatarWithoutChangingSlug()
+    public async Task Update_WhenUserIsMember_ShouldUpdateNameWithoutChangingSlug()
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
@@ -16,15 +16,14 @@ public class OrganizationsControllerUpdateTests
 
         var result = await controller.Update(organization.Id, new UpdateOrganizationRequest
         {
-            Name = "Acme Updated",
-            AvatarUrl = "https://cdn.example/avatar.png"
+            Name = "Acme Updated"
         }, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var response = Assert.IsType<OrganizationResponse>(ok.Value);
         Assert.Equal("Acme Updated", response.Name);
         Assert.Equal("acme", response.Slug);
-        Assert.Equal("https://cdn.example/avatar.png", response.AvatarUrl);
+        Assert.Null(response.AvatarUrl);
 
         var persisted = await db.Organizations.SingleAsync(o => o.Id == organization.Id);
         Assert.Equal("acme", persisted.Slug);
