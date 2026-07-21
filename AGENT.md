@@ -14,15 +14,15 @@
 - Endpoints:
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
-  - `POST /api/team/organizations` — create org + creator as Owner member (`201`, `409` slug conflict)
-  - `GET /api/team/organizations` — list current user organizations
-  - `GET /api/team/organizations/{orgId}` — organization details (member only)
-  - `GET /api/team/organizations/by-slug/{slug}` — lookup by slug (member only)
-  - `PATCH /api/team/organizations/{orgId}` — update `name` (slug unchanged)
-  - `PUT /api/team/organizations/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
-  - `DELETE /api/team/organizations/{orgId}/avatar` — remove avatar (member-only)
-  - `DELETE /api/team/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
-- Flow: frontend -> infrastructure nginx -> gateway `/api/team/{**catch-all}` -> this service.
+  - `POST /api/organizations` — create org + creator as Owner member (`201`, `409` slug conflict); body: `name`, optional `slug`, optional `description`
+  - `GET /api/organizations` — list current user organizations
+  - `GET /api/organizations/{orgId}` — organization details (member only)
+  - `GET /api/organizations/by-slug/{slug}` — lookup by slug (member only)
+  - `PATCH /api/organizations/{orgId}` — update `name` and/or `description` (slug unchanged)
+  - `PUT /api/organizations/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
+  - `DELETE /api/organizations/{orgId}/avatar` — remove avatar (member-only)
+  - `DELETE /api/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
+- Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
 - Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
 - Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); exclude `/health` and `/metrics` from Serilog request logging.

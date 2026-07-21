@@ -22,6 +22,7 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.HasIndex(o => o.Slug).IsUnique();
             e.Property(o => o.Name).HasMaxLength(100);
             e.Property(o => o.Slug).HasMaxLength(100);
+            e.Property(o => o.Description).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Permission>(e =>

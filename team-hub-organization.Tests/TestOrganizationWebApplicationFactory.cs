@@ -85,7 +85,7 @@ public class OrganizationsIntegrationTests : IClassFixture<TestOrganizationWebAp
     public async Task Create_WithoutToken_ShouldReturnUnauthorized()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/team/organizations", new CreateOrganizationRequest { Name = "Acme" });
+        var response = await client.PostAsJsonAsync("/api/organizations", new CreateOrganizationRequest { Name = "Acme" });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -93,7 +93,7 @@ public class OrganizationsIntegrationTests : IClassFixture<TestOrganizationWebAp
     public async Task Create_WithToken_ShouldReturnCreated()
     {
         var client = _factory.CreateAuthenticatedClient(Guid.NewGuid());
-        var response = await client.PostAsJsonAsync("/api/team/organizations", new CreateOrganizationRequest { Name = "Acme" });
+        var response = await client.PostAsJsonAsync("/api/organizations", new CreateOrganizationRequest { Name = "Acme" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var organization = await response.Content.ReadFromJsonAsync<OrganizationResponse>();

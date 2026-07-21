@@ -37,6 +37,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
             Id = Guid.NewGuid(),
             Name = request.Name.Trim(),
             Slug = slug,
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -152,6 +153,9 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         if (!string.IsNullOrWhiteSpace(request.Name))
             organization.Name = request.Name.Trim();
 
+        if (request.Description is not null)
+            organization.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+
         organization.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -199,6 +203,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         Id = organization.Id,
         Name = organization.Name,
         Slug = organization.Slug,
+        Description = organization.Description,
         AvatarUrl = OrganizationAvatarService.ResolveAvatarUrl(organization.AvatarUrl, BlobStorage),
         CreatedAt = organization.CreatedAt,
         UpdatedAt = organization.UpdatedAt

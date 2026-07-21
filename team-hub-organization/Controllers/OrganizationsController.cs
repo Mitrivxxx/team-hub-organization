@@ -6,7 +6,7 @@ using team_hub_organization.Services.Organizations;
 namespace team_hub_organization.Controllers;
 
 [ApiController]
-[Route("api/team/organizations")]
+[Route("api/organizations")]
 [Authorize]
 public partial class OrganizationsController(
     IOrganizationService organizationService,

@@ -8,7 +8,7 @@ Accept: application/json
 ###
 
 # Organizations
-POST {{team_hub_organization_HostAddress}}/api/team/organizations
+POST {{team_hub_organization_HostAddress}}/api/organizations
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -18,25 +18,25 @@ Content-Type: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/team/organizations
+GET {{team_hub_organization_HostAddress}}/api/organizations
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+GET {{team_hub_organization_HostAddress}}/api/organizations/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/team/organizations/by-slug/acme-corp
+GET {{team_hub_organization_HostAddress}}/api/organizations/by-slug/acme-corp
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-PATCH {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+PATCH {{team_hub_organization_HostAddress}}/api/organizations/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 ###
 
-PUT {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}/avatar
+PUT {{team_hub_organization_HostAddress}}/api/organizations/{{organizationId}}/avatar
 Authorization: Bearer {{accessToken}}
 Content-Type: multipart/form-data; boundary=----AvatarBoundary
 
@@ -59,12 +59,12 @@ Content-Type: image/png
 
 ###
 
-DELETE {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}/avatar
+DELETE {{team_hub_organization_HostAddress}}/api/organizations/{{organizationId}}/avatar
 Authorization: Bearer {{accessToken}}
 
 ###
 
-DELETE {{team_hub_organization_HostAddress}}/api/team/organizations/{{organizationId}}
+DELETE {{team_hub_organization_HostAddress}}/api/organizations/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 
 ###
