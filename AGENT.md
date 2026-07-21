@@ -23,7 +23,7 @@
   - `DELETE /api/team/organizations/{orgId}/avatar` — remove avatar (member-only)
   - `DELETE /api/team/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
 - Flow: frontend -> infrastructure nginx -> gateway `/api/team/{**catch-all}` -> this service.
-- Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`.
+- Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
 - Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); exclude `/health` and `/metrics` from Serilog request logging.
 - Keep `ExceptionMiddleware` as the first middleware (RFC 7807 `ProblemDetails`).
