@@ -14,14 +14,15 @@
 - Endpoints:
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
-  - `POST /api/organizations` — create org + creator as Owner member (`201`, `409` slug conflict); body: `name`, optional `slug`, optional `description`
-  - `GET /api/organizations` — list current user organizations
-  - `GET /api/organizations/{orgId}` — organization details (member only)
-  - `GET /api/organizations/by-slug/{slug}` — lookup by slug (member only)
-  - `PATCH /api/organizations/{orgId}` — update `name` and/or `description` (slug unchanged)
-  - `PUT /api/organizations/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
-  - `DELETE /api/organizations/{orgId}/avatar` — remove avatar (member-only)
-  - `DELETE /api/organizations/{orgId}` — soft delete (`DeletedAt`; Owner only)
+  - `POST /api/organizations/v0.1.0` — create org + creator as Owner member (`201`, `409` slug conflict); body: `name`, optional `slug`, optional `description`
+  - `GET /api/organizations/v0.1.0` — list current user organizations
+  - `GET /api/organizations/v0.1.0/{orgId}` — organization details (member only)
+  - `GET /api/organizations/v0.1.0/by-slug/{slug}` — lookup by slug (member only)
+  - `PATCH /api/organizations/v0.1.0/{orgId}` — update `name` and/or `description` (slug unchanged)
+  - `PUT /api/organizations/v0.1.0/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
+  - `DELETE /api/organizations/v0.1.0/{orgId}/avatar` — remove avatar (member-only)
+  - `DELETE /api/organizations/v0.1.0/{orgId}` — soft delete (`DeletedAt`; Owner only)
+- API versioning: URL path `/api/organizations/v0.1.0/*` (SemVer `0.1.0`; Asp.Versioning major.minor `0.1`, packages `Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0).
 - Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
 - Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).

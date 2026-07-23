@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
@@ -69,7 +71,23 @@ public static class ServiceCollectionExtensions
     {
         services.AddAuthorization();
         services.AddControllers();
+        services.AddApiVersioning(options =>
+            {
+                // Asp.Versioning uses major.minor; public SemVer 0.1.0 is exposed in the URL path.
+                options.DefaultApiVersion = new ApiVersion(0, 1);
+                options.AssumeDefaultVersionWhenUnspecified = true;
+                options.ReportApiVersions = true;
+                options.ApiVersionReader = new UrlSegmentApiVersionReader();
+            })
+            .AddMvc()
+            .AddApiExplorer(options =>
+            {
+                options.GroupNameFormat = "'v'VVV";
+                options.FormatGroupName = (_, _) => "v0.1.0";
+                options.SubstituteApiVersionInUrl = true;
+            });
         services.AddEndpointsApiExplorer();
+        services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
         services.AddSwaggerGen(options =>
         {
             var xmlPath = Path.Combine(AppContext.BaseDirectory, $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");

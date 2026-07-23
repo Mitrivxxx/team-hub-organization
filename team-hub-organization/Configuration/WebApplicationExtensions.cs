@@ -1,3 +1,5 @@
+using Asp.Versioning.ApiExplorer;
+
 namespace team_hub_organization.Configuration;
 
 public static class WebApplicationExtensions
@@ -16,7 +18,16 @@ public static class WebApplicationExtensions
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
-            app.UseSwaggerUI();
+            app.UseSwaggerUI(options =>
+            {
+                var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+                foreach (var description in provider.ApiVersionDescriptions)
+                {
+                    options.SwaggerEndpoint(
+                        $"/swagger/{description.GroupName}/swagger.json",
+                        $"Team Hub Organization API {description.GroupName}");
+                }
+            });
         }
 
         app.MapHealthChecks("/health");
