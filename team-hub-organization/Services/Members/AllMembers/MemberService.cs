@@ -24,7 +24,12 @@ public sealed class MemberService(
             .Where(m => m.OrganizationId == organizationId);
 
         if (roleId is not null)
-            query = query.Where(m => m.RoleId == roleId);
+        {
+            var userIdsWithRole = db.OrganizationMemberRoles.AsNoTracking()
+                .Where(m => m.OrganizationId == organizationId && m.RoleId == roleId)
+                .Select(m => m.UserId);
+            query = query.Where(m => userIdsWithRole.Contains(m.UserId));
+        }
 
         if (teamId is not null)
         {
@@ -39,21 +44,8 @@ public sealed class MemberService(
             query = query.Where(m => teamUserIds.Contains(m.UserId));
         }
 
-        var members = await query
-            .Join(db.Roles.AsNoTracking(), m => m.RoleId, r => r.Id, (m, r) => new { m, r })
-            .OrderBy(x => x.m.JoinedAt)
-            .ToListAsync(cancellationToken);
-
-        var teamIdsByUser = await LoadTeamIdsByUserAsync(organizationId, cancellationToken);
-
-        return members.Select(x => new MemberResponse
-        {
-            UserId = x.m.UserId,
-            RoleId = x.r.Id,
-            RoleName = x.r.Name,
-            JoinedAt = x.m.JoinedAt,
-            TeamIds = teamIdsByUser.GetValueOrDefault(x.m.UserId, [])
-        }).ToList();
+        var members = await query.OrderBy(m => m.JoinedAt).ToListAsync(cancellationToken);
+        return await MapMembersAsync(organizationId, members, cancellationToken);
     }
 
     public async Task<MemberResponse?> GetAsync(
@@ -64,24 +56,14 @@ public sealed class MemberService(
     {
         await authz.EnsureMemberAsync(organizationId, actorUserId, cancellationToken);
 
-        var row = await db.OrganizationMembers.AsNoTracking()
-            .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
-            .Join(db.Roles.AsNoTracking(), m => m.RoleId, r => r.Id, (m, r) => new { m, r })
-            .FirstOrDefaultAsync(cancellationToken);
+        var member = await db.OrganizationMembers.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
 
-        if (row is null)
+        if (member is null)
             return null;
 
-        var teamIdsByUser = await LoadTeamIdsByUserAsync(organizationId, cancellationToken);
-
-        return new MemberResponse
-        {
-            UserId = row.m.UserId,
-            RoleId = row.r.Id,
-            RoleName = row.r.Name,
-            JoinedAt = row.m.JoinedAt,
-            TeamIds = teamIdsByUser.GetValueOrDefault(row.m.UserId, [])
-        };
+        var mapped = await MapMembersAsync(organizationId, [member], cancellationToken);
+        return mapped[0];
     }
 
     public async Task<MemberResponse> AddAsync(
@@ -97,18 +79,30 @@ public sealed class MemberService(
                 cancellationToken))
             throw new OrganizationConflictException("User is already a member of this organization.");
 
-        var role = await GetOrgRoleAsync(organizationId, request.RoleId, cancellationToken);
-        await EnsureCanAssignRoleAsync(organizationId, actorUserId, role, cancellationToken);
+        var roles = await ResolveOrgRolesAsync(organizationId, request.RoleIds, cancellationToken);
+        foreach (var role in roles)
+            await EnsureCanAssignRoleAsync(organizationId, actorUserId, role, cancellationToken);
 
+        var now = DateTimeOffset.UtcNow;
         db.OrganizationMembers.Add(new OrganizationMember
         {
             OrganizationId = organizationId,
             UserId = request.UserId,
-            RoleId = role.Id,
-            JoinedAt = DateTimeOffset.UtcNow
+            JoinedAt = now
         });
-        await db.SaveChangesAsync(cancellationToken);
 
+        foreach (var role in roles)
+        {
+            db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+            {
+                OrganizationId = organizationId,
+                UserId = request.UserId,
+                RoleId = role.Id,
+                AssignedAt = now
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
         return (await GetAsync(organizationId, request.UserId, actorUserId, cancellationToken))!;
     }
 
@@ -127,17 +121,37 @@ public sealed class MemberService(
         if (member is null)
             return null;
 
-        var currentRole = await db.Roles.AsNoTracking().FirstAsync(r => r.Id == member.RoleId, cancellationToken);
-        var newRole = await GetOrgRoleAsync(organizationId, request.RoleId, cancellationToken);
+        var newRoles = await ResolveOrgRolesAsync(organizationId, request.RoleIds, cancellationToken);
+        foreach (var role in newRoles)
+            await EnsureCanAssignRoleAsync(organizationId, actorUserId, role, cancellationToken);
 
-        if (currentRole.Name == SystemRoleNames.Owner && currentRole.Scope == RoleScope.Org)
+        var existing = await db.OrganizationMemberRoles
+            .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        var currentOwnerAssignment = await db.OrganizationMemberRoles
+            .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
+            .Join(db.Roles, m => m.RoleId, r => r.Id, (m, r) => r)
+            .AnyAsync(r => r.Name == SystemRoleNames.Owner && r.Scope == RoleScope.Org, cancellationToken);
+
+        var newHasOwner = newRoles.Any(r => r.Name == SystemRoleNames.Owner && r.Scope == RoleScope.Org);
+        if (currentOwnerAssignment && !newHasOwner)
             await EnsureNotLastOwnerAsync(organizationId, cancellationToken);
 
-        await EnsureCanAssignRoleAsync(organizationId, actorUserId, newRole, cancellationToken);
+        db.OrganizationMemberRoles.RemoveRange(existing);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var role in newRoles)
+        {
+            db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+            {
+                OrganizationId = organizationId,
+                UserId = userId,
+                RoleId = role.Id,
+                AssignedAt = now
+            });
+        }
 
-        member.RoleId = newRole.Id;
         await db.SaveChangesAsync(cancellationToken);
-
         return await GetAsync(organizationId, userId, actorUserId, cancellationToken);
     }
 
@@ -150,14 +164,17 @@ public sealed class MemberService(
         await authz.EnsurePermissionAsync(organizationId, actorUserId, OrganizationPermissionCodes.OrgMembersManage, cancellationToken);
 
         var member = await db.OrganizationMembers
-            .Include(m => m.Role)
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
 
         if (member is null)
             return false;
 
-        if (member.Role.Name == SystemRoleNames.Owner && member.Role.Scope == RoleScope.Org)
+        if (await authz.IsOwnerAsync(organizationId, userId, cancellationToken))
             await EnsureNotLastOwnerAsync(organizationId, cancellationToken);
+
+        var roleAssignments = await db.OrganizationMemberRoles
+            .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
+            .ToListAsync(cancellationToken);
 
         var teamMemberships = await db.TeamMembers
             .Where(tm => tm.UserId == userId)
@@ -168,6 +185,7 @@ public sealed class MemberService(
                 (tm, _) => tm)
             .ToListAsync(cancellationToken);
 
+        db.OrganizationMemberRoles.RemoveRange(roleAssignments);
         db.TeamMembers.RemoveRange(teamMemberships);
         db.OrganizationMembers.Remove(member);
         await db.SaveChangesAsync(cancellationToken);
@@ -209,6 +227,47 @@ public sealed class MemberService(
             .ToListAsync(cancellationToken);
     }
 
+    async Task<IReadOnlyList<MemberResponse>> MapMembersAsync(
+        Guid organizationId,
+        IReadOnlyList<OrganizationMember> members,
+        CancellationToken cancellationToken)
+    {
+        var userIds = members.Select(m => m.UserId).ToList();
+        var roleRows = await db.OrganizationMemberRoles.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId && userIds.Contains(m.UserId))
+            .Join(
+                db.Roles.AsNoTracking(),
+                m => m.RoleId,
+                r => r.Id,
+                (m, r) => new { m.UserId, Role = r })
+            .ToListAsync(cancellationToken);
+
+        var rolesByUser = roleRows
+            .GroupBy(x => x.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<RoleSummaryDto>)g
+                    .Select(x => new RoleSummaryDto
+                    {
+                        Id = x.Role.Id,
+                        Name = x.Role.Name,
+                        Scope = x.Role.Scope == RoleScope.Org ? "ORG" : "TEAM",
+                        IsSystem = x.Role.IsSystem
+                    })
+                    .OrderBy(r => r.Name)
+                    .ToList());
+
+        var teamIdsByUser = await LoadTeamIdsByUserAsync(organizationId, cancellationToken);
+
+        return members.Select(m => new MemberResponse
+        {
+            UserId = m.UserId,
+            Roles = rolesByUser.GetValueOrDefault(m.UserId, []),
+            JoinedAt = m.JoinedAt,
+            TeamIds = teamIdsByUser.GetValueOrDefault(m.UserId, [])
+        }).ToList();
+    }
+
     async Task<Dictionary<Guid, IReadOnlyList<Guid>>> LoadTeamIdsByUserAsync(
         Guid organizationId,
         CancellationToken cancellationToken)
@@ -227,14 +286,20 @@ public sealed class MemberService(
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.TeamId).ToList());
     }
 
-    async Task<Role> GetOrgRoleAsync(Guid organizationId, Guid roleId, CancellationToken cancellationToken)
+    async Task<List<Role>> ResolveOrgRolesAsync(Guid organizationId, IReadOnlyList<Guid> roleIds, CancellationToken cancellationToken)
     {
-        var role = await db.Roles.AsNoTracking()
-            .FirstOrDefaultAsync(
-                r => r.Id == roleId && r.OrganizationId == organizationId && r.Scope == RoleScope.Org,
-                cancellationToken);
+        var distinct = roleIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (distinct.Count == 0)
+            throw new OrganizationValidationException("At least one roleId is required.");
 
-        return role ?? throw new OrganizationValidationException("Role was not found or is not an organization-scoped role.");
+        var roles = await db.Roles.AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId && r.Scope == RoleScope.Org && distinct.Contains(r.Id))
+            .ToListAsync(cancellationToken);
+
+        if (roles.Count != distinct.Count)
+            throw new OrganizationValidationException("One or more roles were not found or are not organization-scoped.");
+
+        return roles;
     }
 
     async Task EnsureCanAssignRoleAsync(Guid organizationId, Guid actorUserId, Role role, CancellationToken cancellationToken)
@@ -246,7 +311,7 @@ public sealed class MemberService(
 
     async Task EnsureNotLastOwnerAsync(Guid organizationId, CancellationToken cancellationToken)
     {
-        var ownerCount = await db.OrganizationMembers
+        var ownerCount = await db.OrganizationMemberRoles
             .Join(db.Roles, m => m.RoleId, r => r.Id, (m, r) => new { m, r })
             .CountAsync(
                 x => x.m.OrganizationId == organizationId

@@ -30,13 +30,7 @@ public class OrganizationsControllerDeleteTests
         var memberId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.Add(new team_hub_organization.Models.OrganizationMember
-        {
-            OrganizationId = organization.Id,
-            UserId = memberId,
-            RoleId = roles.Member.Id,
-            JoinedAt = DateTimeOffset.UtcNow
-        });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, memberId, roles.Member.Id);
         await db.SaveChangesAsync();
 
         var controller = OrganizationsControllerTestHelpers.CreateController(db, memberId);

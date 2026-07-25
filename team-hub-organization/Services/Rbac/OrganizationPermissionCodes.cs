@@ -10,15 +10,15 @@ public static class OrganizationPermissionCodes
     public const string TeamManage = "team.manage";
     public const string TeamMembersManage = "team.members.manage";
 
-    public static readonly IReadOnlyList<(string Code, string Description)> Catalog =
+    public static readonly IReadOnlyList<(string Code, string Name, string Description)> Catalog =
     [
-        (OrgManage, "Update organization settings and avatar"),
-        (OrgMembersManage, "Manage organization members and invitations"),
-        (OrgTeamsManage, "Manage teams and team membership"),
-        (OrgRolesManage, "Manage roles and role permissions"),
-        (OrgDelete, "Delete the organization"),
-        (TeamManage, "Update team settings and avatar"),
-        (TeamMembersManage, "Manage team members")
+        (OrgManage, "Manage organization", "Update organization settings and avatar"),
+        (OrgMembersManage, "Manage members", "Manage organization members and invitations"),
+        (OrgTeamsManage, "Manage teams", "Manage teams and team membership"),
+        (OrgRolesManage, "Manage roles", "Manage roles and role permissions"),
+        (OrgDelete, "Delete organization", "Delete the organization"),
+        (TeamManage, "Manage team", "Update team settings and avatar"),
+        (TeamMembersManage, "Manage team members", "Manage team members")
     ];
 
     public static readonly IReadOnlyList<string> All =
@@ -41,4 +41,7 @@ public static class OrganizationPermissionCodes
         TeamManage,
         TeamMembersManage
     ];
+
+    public static bool IsSystemCode(string code) =>
+        All.Contains(code, StringComparer.Ordinal);
 }

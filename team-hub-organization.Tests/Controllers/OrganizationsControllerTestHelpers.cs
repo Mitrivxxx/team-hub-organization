@@ -72,8 +72,8 @@ internal static class OrganizationsControllerTestHelpers
     public static RolesController CreateRolesController(OrganizationDbContext db, Guid userId) =>
         new(new RoleService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
 
-    public static PermissionsController CreatePermissionsController(OrganizationDbContext db) =>
-        new(new PermissionService(db));
+    public static PermissionsController CreatePermissionsController(OrganizationDbContext db, Guid userId) =>
+        new(new PermissionService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
 
     public static TeamsController CreateTeamsController(OrganizationDbContext db, Guid userId, IBlobStorageService? blob = null)
     {
@@ -156,14 +156,45 @@ internal static class OrganizationsControllerTestHelpers
         {
             OrganizationId = organization.Id,
             UserId = userId,
-            RoleId = roles.Owner.Id,
             JoinedAt = now
         };
 
         db.OrganizationMembers.Add(member);
+        db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+        {
+            OrganizationId = organization.Id,
+            UserId = userId,
+            RoleId = roles.Owner.Id,
+            AssignedAt = now
+        });
         await db.SaveChangesAsync();
 
         return (organization, roles.Owner, member, roles);
+    }
+
+    public static OrganizationMember AddMemberWithRole(
+        OrganizationDbContext db,
+        Guid organizationId,
+        Guid userId,
+        Guid roleId,
+        DateTimeOffset? joinedAt = null)
+    {
+        var now = joinedAt ?? DateTimeOffset.UtcNow;
+        var member = new OrganizationMember
+        {
+            OrganizationId = organizationId,
+            UserId = userId,
+            JoinedAt = now
+        };
+        db.OrganizationMembers.Add(member);
+        db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+        {
+            OrganizationId = organizationId,
+            UserId = userId,
+            RoleId = roleId,
+            AssignedAt = now
+        });
+        return member;
     }
 
     sealed class TestCurrentUserService(Guid userId) : ICurrentUserService

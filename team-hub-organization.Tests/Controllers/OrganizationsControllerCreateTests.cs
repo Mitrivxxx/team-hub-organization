@@ -22,10 +22,14 @@ public class OrganizationsControllerCreateTests
         Assert.Equal("acme-corp", response.Slug);
 
         var member = await db.OrganizationMembers
-            .Include(m => m.Role)
             .SingleAsync(m => m.UserId == userId);
 
-        Assert.Equal("Owner", member.Role.Name);
+        var ownerRole = await db.OrganizationMemberRoles
+            .Where(m => m.OrganizationId == member.OrganizationId && m.UserId == userId)
+            .Join(db.Roles, m => m.RoleId, r => r.Id, (_, r) => r)
+            .SingleAsync(r => r.Name == "Owner");
+
+        Assert.Equal("Owner", ownerRole.Name);
     }
 
     [Fact]

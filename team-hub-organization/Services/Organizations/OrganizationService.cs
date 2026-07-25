@@ -48,15 +48,20 @@ public sealed class OrganizationService(
 
         var seeded = await OrganizationRoleSeeder.SeedSystemRolesAsync(db, organization.Id, now, cancellationToken);
 
-        var member = new OrganizationMember
+        db.OrganizationMembers.Add(new OrganizationMember
+        {
+            OrganizationId = organization.Id,
+            UserId = userId,
+            JoinedAt = now
+        });
+
+        db.OrganizationMemberRoles.Add(new OrganizationMemberRole
         {
             OrganizationId = organization.Id,
             UserId = userId,
             RoleId = seeded.Owner.Id,
-            JoinedAt = now
-        };
-
-        db.OrganizationMembers.Add(member);
+            AssignedAt = now
+        });
 
         if (db.Database.IsRelational())
         {
@@ -196,16 +201,53 @@ public sealed class OrganizationService(
                 cancellationToken)
             ?? throw new OrganizationValidationException("Admin role was not found.");
 
-        var actor = await db.OrganizationMembers
+        _ = await db.OrganizationMembers
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == actorUserId, cancellationToken)
             ?? throw new OrganizationAccessException("User is not a member of this organization.");
 
-        var target = await db.OrganizationMembers
+        _ = await db.OrganizationMembers
             .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == newOwnerUserId, cancellationToken)
             ?? throw new OrganizationValidationException("New owner must already be an organization member.");
 
-        actor.RoleId = adminRole.Id;
-        target.RoleId = ownerRole.Id;
+        var now = DateTimeOffset.UtcNow;
+
+        var actorOwner = await db.OrganizationMemberRoles
+            .FirstOrDefaultAsync(
+                m => m.OrganizationId == organizationId && m.UserId == actorUserId && m.RoleId == ownerRole.Id,
+                cancellationToken);
+
+        if (actorOwner is not null)
+            db.OrganizationMemberRoles.Remove(actorOwner);
+
+        if (!await db.OrganizationMemberRoles.AnyAsync(
+                m => m.OrganizationId == organizationId && m.UserId == actorUserId && m.RoleId == adminRole.Id,
+                cancellationToken))
+        {
+            db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+            {
+                OrganizationId = organizationId,
+                UserId = actorUserId,
+                RoleId = adminRole.Id,
+                AssignedAt = now
+            });
+        }
+
+        var targetOwner = await db.OrganizationMemberRoles
+            .FirstOrDefaultAsync(
+                m => m.OrganizationId == organizationId && m.UserId == newOwnerUserId && m.RoleId == ownerRole.Id,
+                cancellationToken);
+
+        if (targetOwner is null)
+        {
+            db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+            {
+                OrganizationId = organizationId,
+                UserId = newOwnerUserId,
+                RoleId = ownerRole.Id,
+                AssignedAt = now
+            });
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -215,7 +257,7 @@ public sealed class OrganizationService(
 
         if (await authz.IsOwnerAsync(organizationId, userId, cancellationToken))
         {
-            var ownerCount = await db.OrganizationMembers
+            var ownerCount = await db.OrganizationMemberRoles
                 .Join(db.Roles, m => m.RoleId, r => r.Id, (m, r) => new { m, r })
                 .CountAsync(
                     x => x.m.OrganizationId == organizationId
@@ -230,6 +272,10 @@ public sealed class OrganizationService(
         var member = await db.OrganizationMembers
             .FirstAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
 
+        var roleAssignments = await db.OrganizationMemberRoles
+            .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
+            .ToListAsync(cancellationToken);
+
         var teamMemberships = await db.TeamMembers
             .Where(tm => tm.UserId == userId)
             .Join(
@@ -239,6 +285,7 @@ public sealed class OrganizationService(
                 (tm, _) => tm)
             .ToListAsync(cancellationToken);
 
+        db.OrganizationMemberRoles.RemoveRange(roleAssignments);
         db.TeamMembers.RemoveRange(teamMemberships);
         db.OrganizationMembers.Remove(member);
         await db.SaveChangesAsync(cancellationToken);

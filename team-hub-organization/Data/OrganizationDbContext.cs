@@ -10,9 +10,11 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
+    public DbSet<OrganizationMemberRole> OrganizationMemberRoles => Set<OrganizationMemberRole>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<InvitationOrgRole> InvitationOrgRoles => Set<InvitationOrgRole>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,15 +30,20 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
         modelBuilder.Entity<Permission>(e =>
         {
             e.ToTable("permissions");
-            e.HasIndex(p => p.Code).IsUnique();
+            e.HasIndex(p => new { p.OrganizationId, p.Code }).IsUnique();
+            e.Property(p => p.Name).HasMaxLength(100);
             e.Property(p => p.Code).HasMaxLength(100);
+            e.Property(p => p.Description).HasMaxLength(500);
+            e.HasOne(p => p.Organization).WithMany(o => o.Permissions).HasForeignKey(p => p.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Role>(e =>
         {
             e.ToTable("roles");
             e.HasIndex(r => r.OrganizationId);
+            e.HasIndex(r => new { r.OrganizationId, r.Name, r.Scope }).IsUnique();
             e.Property(r => r.Name).HasMaxLength(100);
+            e.Property(r => r.Description).HasMaxLength(500);
             e.Property(r => r.Scope)
                 .HasConversion(v => v == RoleScope.Org ? "ORG" : "TEAM", v => v == "ORG" ? RoleScope.Org : RoleScope.Team)
                 .HasMaxLength(20);
@@ -48,7 +55,7 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.ToTable("role_permissions");
             e.HasKey(rp => new { rp.RoleId, rp.PermissionId });
             e.HasOne(rp => rp.Role).WithMany(r => r.RolePermissions).HasForeignKey(rp => rp.RoleId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(rp => rp.Permission).WithMany(p => p.RolePermissions).HasForeignKey(rp => rp.PermissionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(rp => rp.Permission).WithMany(p => p.RolePermissions).HasForeignKey(rp => rp.PermissionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OrganizationMember>(e =>
@@ -57,7 +64,21 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.HasKey(m => new { m.OrganizationId, m.UserId });
             e.HasIndex(m => m.UserId);
             e.HasOne(m => m.Organization).WithMany(o => o.Members).HasForeignKey(m => m.OrganizationId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(m => m.Role).WithMany(r => r.OrganizationMembers).HasForeignKey(m => m.RoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OrganizationMemberRole>(e =>
+        {
+            e.ToTable("organization_member_roles");
+            e.HasKey(m => new { m.OrganizationId, m.UserId, m.RoleId });
+            e.HasIndex(m => m.RoleId);
+            e.HasOne(m => m.Member)
+                .WithMany(member => member.MemberRoles)
+                .HasForeignKey(m => new { m.OrganizationId, m.UserId })
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.Role)
+                .WithMany(r => r.OrganizationMemberRoles)
+                .HasForeignKey(m => m.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Team>(e =>
@@ -90,8 +111,15 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
                 .HasMaxLength(20);
             e.HasOne(i => i.Organization).WithMany(o => o.Invitations).HasForeignKey(i => i.OrganizationId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(i => i.Team).WithMany(t => t.Invitations).HasForeignKey(i => i.TeamId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(i => i.OrgRole).WithMany(r => r.OrganizationInvitations).HasForeignKey(i => i.OrgRoleId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(i => i.TeamRole).WithMany(r => r.TeamInvitations).HasForeignKey(i => i.TeamRoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InvitationOrgRole>(e =>
+        {
+            e.ToTable("invitation_org_roles");
+            e.HasKey(x => new { x.InvitationId, x.RoleId });
+            e.HasOne(x => x.Invitation).WithMany(i => i.OrgRoles).HasForeignKey(x => x.InvitationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Role).WithMany(r => r.InvitationOrgRoles).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

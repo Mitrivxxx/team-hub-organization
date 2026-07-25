@@ -12,6 +12,7 @@ public class Organization
     public DateTimeOffset? DeletedAt { get; set; }
 
     public ICollection<Role> Roles { get; set; } = [];
+    public ICollection<Permission> Permissions { get; set; } = [];
     public ICollection<OrganizationMember> Members { get; set; } = [];
     public ICollection<Team> Teams { get; set; } = [];
     public ICollection<Invitation> Invitations { get; set; } = [];

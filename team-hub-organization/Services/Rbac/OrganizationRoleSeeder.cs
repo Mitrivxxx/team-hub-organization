@@ -19,15 +19,13 @@ public static class OrganizationRoleSeeder
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
-        await EnsurePermissionsExistAsync(db, cancellationToken);
+        var permissions = await SeedOrganizationPermissionsAsync(db, organizationId, now, cancellationToken);
 
-        var permissions = await db.Permissions.ToDictionaryAsync(p => p.Code, cancellationToken);
-
-        var owner = CreateRole(organizationId, SystemRoleNames.Owner, RoleScope.Org, now);
-        var admin = CreateRole(organizationId, SystemRoleNames.Admin, RoleScope.Org, now);
-        var member = CreateRole(organizationId, SystemRoleNames.Member, RoleScope.Org, now);
-        var teamLead = CreateRole(organizationId, SystemRoleNames.TeamLead, RoleScope.Team, now);
-        var teamMember = CreateRole(organizationId, SystemRoleNames.Member, RoleScope.Team, now);
+        var owner = CreateRole(organizationId, SystemRoleNames.Owner, RoleScope.Org, now, isSystem: true);
+        var admin = CreateRole(organizationId, SystemRoleNames.Admin, RoleScope.Org, now, isSystem: true);
+        var member = CreateRole(organizationId, SystemRoleNames.Member, RoleScope.Org, now, isSystem: true);
+        var teamLead = CreateRole(organizationId, SystemRoleNames.TeamLead, RoleScope.Team, now, isSystem: true);
+        var teamMember = CreateRole(organizationId, SystemRoleNames.Member, RoleScope.Team, now, isSystem: true);
 
         db.Roles.AddRange(owner, admin, member, teamLead, teamMember);
 
@@ -38,12 +36,47 @@ public static class OrganizationRoleSeeder
         return new SeededRoles(owner, admin, member, teamLead, teamMember);
     }
 
-    static Role CreateRole(Guid organizationId, string name, RoleScope scope, DateTimeOffset now) => new()
+    public static async Task<Dictionary<string, Permission>> SeedOrganizationPermissionsAsync(
+        OrganizationDbContext db,
+        Guid organizationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await db.Permissions
+            .Where(p => p.OrganizationId == organizationId)
+            .ToDictionaryAsync(p => p.Code, cancellationToken);
+
+        var missing = OrganizationPermissionCodes.Catalog
+            .Where(p => !existing.ContainsKey(p.Code))
+            .Select(p => new Permission
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = organizationId,
+                Name = p.Name,
+                Code = p.Code,
+                Description = p.Description,
+                IsSystem = true,
+                CreatedAt = now
+            })
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            db.Permissions.AddRange(missing);
+            foreach (var permission in missing)
+                existing[permission.Code] = permission;
+        }
+
+        return existing;
+    }
+
+    static Role CreateRole(Guid organizationId, string name, RoleScope scope, DateTimeOffset now, bool isSystem) => new()
     {
         Id = Guid.NewGuid(),
         OrganizationId = organizationId,
         Name = name,
         Scope = scope,
+        IsSystem = isSystem,
         CreatedAt = now
     };
 
@@ -64,29 +97,5 @@ public static class OrganizationRoleSeeder
                 PermissionId = permission.Id
             });
         }
-    }
-
-    static async Task EnsurePermissionsExistAsync(OrganizationDbContext db, CancellationToken cancellationToken)
-    {
-        var existing = await db.Permissions
-            .Select(p => p.Code)
-            .ToListAsync(cancellationToken);
-
-        var existingSet = existing.ToHashSet(StringComparer.Ordinal);
-        var missing = OrganizationPermissionCodes.Catalog
-            .Where(p => !existingSet.Contains(p.Code))
-            .Select(p => new Permission
-            {
-                Id = Guid.NewGuid(),
-                Code = p.Code,
-                Description = p.Description
-            })
-            .ToList();
-
-        if (missing.Count == 0)
-            return;
-
-        db.Permissions.AddRange(missing);
-        await db.SaveChangesAsync(cancellationToken);
     }
 }

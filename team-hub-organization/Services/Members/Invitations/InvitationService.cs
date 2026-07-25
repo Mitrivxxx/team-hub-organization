@@ -28,7 +28,7 @@ public sealed class InvitationService(
             query = query.Where(i => i.Status == status);
 
         var invitations = await query.OrderByDescending(i => i.CreatedAt).ToListAsync(cancellationToken);
-        return invitations.Select(i => ToResponse(i, includeToken: false)).ToList();
+        return await MapManyAsync(invitations, includeToken: false, cancellationToken);
     }
 
     public async Task<InvitationResponse?> GetAsync(
@@ -43,7 +43,7 @@ public sealed class InvitationService(
         var invitation = await db.Invitations.AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == invitationId && i.OrganizationId == organizationId, cancellationToken);
 
-        return invitation is null ? null : ToResponse(invitation, includeToken: false);
+        return invitation is null ? null : await MapOneAsync(invitation, includeToken: false, cancellationToken);
     }
 
     public async Task<InvitationResponse> CreateAsync(
@@ -55,20 +55,16 @@ public sealed class InvitationService(
         await authz.EnsurePermissionAsync(organizationId, actorUserId, OrganizationPermissionCodes.OrgMembersManage, cancellationToken);
 
         var email = request.Email.Trim().ToLowerInvariant();
-        var orgRole = await db.Roles.AsNoTracking()
-            .FirstOrDefaultAsync(
-                r => r.Id == request.OrgRoleId && r.OrganizationId == organizationId && r.Scope == RoleScope.Org,
-                cancellationToken)
-            ?? throw new OrganizationValidationException("Organization role was not found.");
+        var orgRoles = await ResolveOrgRolesAsync(organizationId, request.OrgRoleIds, cancellationToken);
 
-        if (orgRole.Name == SystemRoleNames.Owner
+        if (orgRoles.Any(r => r.Name == SystemRoleNames.Owner)
             && !await authz.IsOwnerAsync(organizationId, actorUserId, cancellationToken))
             throw new OrganizationAccessException("Only owners can invite users as Owner.");
 
         Guid? teamRoleId = null;
         if (request.TeamId is Guid teamId)
         {
-            var team = await db.Teams.AsNoTracking()
+            _ = await db.Teams.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == teamId && t.OrganizationId == organizationId && t.DeletedAt == null, cancellationToken)
                 ?? throw new OrganizationValidationException("Team was not found.");
 
@@ -82,7 +78,6 @@ public sealed class InvitationService(
                 ?? throw new OrganizationValidationException("Team role was not found.");
 
             teamRoleId = teamRole.Id;
-            _ = team;
         }
         else if (request.TeamRoleId is not null)
         {
@@ -108,7 +103,6 @@ public sealed class InvitationService(
             Email = email,
             InvitedByUserId = actorUserId,
             Token = GenerateToken(),
-            OrgRoleId = orgRole.Id,
             TeamRoleId = teamRoleId,
             Status = InvitationStatus.Pending,
             CreatedAt = now,
@@ -116,8 +110,17 @@ public sealed class InvitationService(
         };
 
         db.Invitations.Add(invitation);
+        foreach (var role in orgRoles)
+        {
+            db.InvitationOrgRoles.Add(new InvitationOrgRole
+            {
+                InvitationId = invitation.Id,
+                RoleId = role.Id
+            });
+        }
+
         await db.SaveChangesAsync(cancellationToken);
-        return ToResponse(invitation, includeToken: true);
+        return await MapOneAsync(invitation, includeToken: true, cancellationToken);
     }
 
     public async Task CancelAsync(
@@ -158,7 +161,7 @@ public sealed class InvitationService(
         invitation.Status = InvitationStatus.Pending;
         invitation.ExpiresAt = DateTimeOffset.UtcNow.Add(DefaultExpiry);
         await db.SaveChangesAsync(cancellationToken);
-        return ToResponse(invitation, includeToken: true);
+        return await MapOneAsync(invitation, includeToken: true, cancellationToken);
     }
 
     public async Task<InvitationResponse?> GetByTokenAsync(string token, CancellationToken cancellationToken = default)
@@ -168,7 +171,7 @@ public sealed class InvitationService(
             return null;
 
         await ExpireIfNeededAsync(invitation, cancellationToken);
-        return ToResponse(invitation, includeToken: false);
+        return await MapOneAsync(invitation, includeToken: false, cancellationToken);
     }
 
     public async Task<MemberResponse> AcceptAsync(string token, Guid userId, CancellationToken cancellationToken = default)
@@ -186,14 +189,32 @@ public sealed class InvitationService(
                 cancellationToken))
             throw new OrganizationConflictException("User is already a member of this organization.");
 
+        var orgRoleIds = await db.InvitationOrgRoles.AsNoTracking()
+            .Where(x => x.InvitationId == invitation.Id)
+            .Select(x => x.RoleId)
+            .ToListAsync(cancellationToken);
+
+        if (orgRoleIds.Count == 0)
+            throw new OrganizationValidationException("Invitation has no organization roles.");
+
         var now = DateTimeOffset.UtcNow;
         db.OrganizationMembers.Add(new OrganizationMember
         {
             OrganizationId = invitation.OrganizationId,
             UserId = userId,
-            RoleId = invitation.OrgRoleId,
             JoinedAt = now
         });
+
+        foreach (var roleId in orgRoleIds)
+        {
+            db.OrganizationMemberRoles.Add(new OrganizationMemberRole
+            {
+                OrganizationId = invitation.OrganizationId,
+                UserId = userId,
+                RoleId = roleId,
+                AssignedAt = now
+            });
+        }
 
         if (invitation.TeamId is Guid teamId && invitation.TeamRoleId is Guid teamRoleId)
         {
@@ -216,7 +237,18 @@ public sealed class InvitationService(
         invitation.Status = InvitationStatus.Accepted;
         await db.SaveChangesAsync(cancellationToken);
 
-        var role = await db.Roles.AsNoTracking().FirstAsync(r => r.Id == invitation.OrgRoleId, cancellationToken);
+        var roles = await db.Roles.AsNoTracking()
+            .Where(r => orgRoleIds.Contains(r.Id))
+            .Select(r => new RoleSummaryDto
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Scope = r.Scope == RoleScope.Org ? "ORG" : "TEAM",
+                IsSystem = r.IsSystem
+            })
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+
         var teamIds = await db.TeamMembers.AsNoTracking()
             .Where(tm => tm.UserId == userId)
             .Join(
@@ -229,8 +261,7 @@ public sealed class InvitationService(
         return new MemberResponse
         {
             UserId = userId,
-            RoleId = role.Id,
-            RoleName = role.Name,
+            Roles = roles,
             JoinedAt = now,
             TeamIds = teamIds
         };
@@ -249,7 +280,7 @@ public sealed class InvitationService(
 
         invitation.Status = InvitationStatus.Rejected;
         await db.SaveChangesAsync(cancellationToken);
-        return ToResponse(invitation, includeToken: false);
+        return await MapOneAsync(invitation, includeToken: false, cancellationToken);
     }
 
     public async Task<IReadOnlyList<InvitationResponse>> ListMineAsync(
@@ -267,7 +298,23 @@ public sealed class InvitationService(
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return invitations.Select(i => ToResponse(i, includeToken: false)).ToList();
+        return await MapManyAsync(invitations, includeToken: false, cancellationToken);
+    }
+
+    async Task<List<Role>> ResolveOrgRolesAsync(Guid organizationId, IReadOnlyList<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        var distinct = roleIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (distinct.Count == 0)
+            throw new OrganizationValidationException("At least one orgRoleId is required.");
+
+        var roles = await db.Roles.AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId && r.Scope == RoleScope.Org && distinct.Contains(r.Id))
+            .ToListAsync(cancellationToken);
+
+        if (roles.Count != distinct.Count)
+            throw new OrganizationValidationException("One or more organization roles were not found.");
+
+        return roles;
     }
 
     async Task<Invitation?> FindByTokenAsync(string token, CancellationToken cancellationToken) =>
@@ -316,20 +363,41 @@ public sealed class InvitationService(
         }
     }
 
-    static InvitationResponse ToResponse(Invitation invitation, bool includeToken) => new()
+    async Task<InvitationResponse> MapOneAsync(Invitation invitation, bool includeToken, CancellationToken cancellationToken)
     {
-        Id = invitation.Id,
-        OrganizationId = invitation.OrganizationId,
-        TeamId = invitation.TeamId,
-        Email = invitation.Email,
-        InvitedByUserId = invitation.InvitedByUserId,
-        OrgRoleId = invitation.OrgRoleId,
-        TeamRoleId = invitation.TeamRoleId,
-        Status = invitation.Status.ToString().ToUpperInvariant(),
-        CreatedAt = invitation.CreatedAt,
-        ExpiresAt = invitation.ExpiresAt,
-        Token = includeToken ? invitation.Token : null
-    };
+        var mapped = await MapManyAsync([invitation], includeToken, cancellationToken);
+        return mapped[0];
+    }
+
+    async Task<IReadOnlyList<InvitationResponse>> MapManyAsync(
+        IReadOnlyList<Invitation> invitations,
+        bool includeToken,
+        CancellationToken cancellationToken)
+    {
+        var invitationIds = invitations.Select(i => i.Id).ToList();
+        var roleRows = await db.InvitationOrgRoles.AsNoTracking()
+            .Where(x => invitationIds.Contains(x.InvitationId))
+            .ToListAsync(cancellationToken);
+
+        var rolesByInvitation = roleRows
+            .GroupBy(x => x.InvitationId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.RoleId).ToList());
+
+        return invitations.Select(invitation => new InvitationResponse
+        {
+            Id = invitation.Id,
+            OrganizationId = invitation.OrganizationId,
+            TeamId = invitation.TeamId,
+            Email = invitation.Email,
+            InvitedByUserId = invitation.InvitedByUserId,
+            OrgRoleIds = rolesByInvitation.GetValueOrDefault(invitation.Id, []),
+            TeamRoleId = invitation.TeamRoleId,
+            Status = invitation.Status.ToString().ToUpperInvariant(),
+            CreatedAt = invitation.CreatedAt,
+            ExpiresAt = invitation.ExpiresAt,
+            Token = includeToken ? invitation.Token : null
+        }).ToList();
+    }
 
     static string GenerateToken()
     {

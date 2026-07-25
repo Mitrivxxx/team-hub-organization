@@ -21,6 +21,7 @@ public class MembersControllerTests
         var members = Assert.IsAssignableFrom<IReadOnlyList<MemberResponse>>(ok.Value);
         Assert.Single(members);
         Assert.Equal(userId, members[0].UserId);
+        Assert.Contains(members[0].Roles, r => r.Name == SystemRoleNames.Owner);
     }
 
     [Fact]
@@ -31,13 +32,7 @@ public class MembersControllerTests
         var memberId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.Add(new OrganizationMember
-        {
-            OrganizationId = organization.Id,
-            UserId = memberId,
-            RoleId = roles.Member.Id,
-            JoinedAt = DateTimeOffset.UtcNow
-        });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, memberId, roles.Member.Id);
         await db.SaveChangesAsync();
 
         var controller = OrganizationsControllerTestHelpers.CreateMembersController(db, ownerId);
@@ -48,7 +43,7 @@ public class MembersControllerTests
         var members = Assert.IsAssignableFrom<IReadOnlyList<MemberResponse>>(ok.Value);
         Assert.Single(members);
         Assert.Equal(memberId, members[0].UserId);
-        Assert.Equal(roles.Member.Id, members[0].RoleId);
+        Assert.Contains(members[0].Roles, r => r.Id == roles.Member.Id);
     }
 
     [Fact]
@@ -60,21 +55,8 @@ public class MembersControllerTests
         var otherId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.AddRange(
-            new OrganizationMember
-            {
-                OrganizationId = organization.Id,
-                UserId = memberId,
-                RoleId = roles.Member.Id,
-                JoinedAt = DateTimeOffset.UtcNow
-            },
-            new OrganizationMember
-            {
-                OrganizationId = organization.Id,
-                UserId = otherId,
-                RoleId = roles.Member.Id,
-                JoinedAt = DateTimeOffset.UtcNow
-            });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, memberId, roles.Member.Id);
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, otherId, roles.Member.Id);
 
         var team = new Team
         {
@@ -113,21 +95,8 @@ public class MembersControllerTests
         var wrongRoleId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.AddRange(
-            new OrganizationMember
-            {
-                OrganizationId = organization.Id,
-                UserId = matchingId,
-                RoleId = roles.Member.Id,
-                JoinedAt = DateTimeOffset.UtcNow
-            },
-            new OrganizationMember
-            {
-                OrganizationId = organization.Id,
-                UserId = wrongRoleId,
-                RoleId = roles.Admin.Id,
-                JoinedAt = DateTimeOffset.UtcNow
-            });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, matchingId, roles.Member.Id);
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, wrongRoleId, roles.Admin.Id);
 
         var team = new Team
         {
@@ -181,30 +150,53 @@ public class MembersControllerTests
         var result = await controller.Add(organization.Id, new AddMemberRequest
         {
             UserId = newUserId,
-            RoleId = roles.Member.Id
+            RoleIds = [roles.Member.Id]
         }, CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(result);
         var member = Assert.IsType<MemberResponse>(created.Value);
         Assert.Equal(newUserId, member.UserId);
-        Assert.Equal(SystemRoleNames.Member, member.RoleName);
+        Assert.Contains(member.Roles, r => r.Name == SystemRoleNames.Member);
     }
 }
 
 public class PermissionsControllerTests
 {
     [Fact]
-    public async Task List_ShouldReturnCatalog()
+    public async Task List_ShouldReturnOrgCatalog()
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
-        await new PermissionSeedService(db).EnsureCatalogAsync();
-        var controller = OrganizationsControllerTestHelpers.CreatePermissionsController(db);
+        var userId = Guid.NewGuid();
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var controller = OrganizationsControllerTestHelpers.CreatePermissionsController(db, userId);
 
-        var result = await controller.List(CancellationToken.None);
+        var result = await controller.List(organization.Id, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var permissions = Assert.IsAssignableFrom<IReadOnlyList<PermissionResponse>>(ok.Value);
+        var permissions = Assert.IsAssignableFrom<IReadOnlyList<PermissionListItemResponse>>(ok.Value);
         Assert.Equal(OrganizationPermissionCodes.All.Count, permissions.Count);
+        Assert.All(permissions, p => Assert.Equal(organization.Id, p.OrganizationId));
+    }
+
+    [Fact]
+    public async Task CreateCustomPermission_ShouldSucceed()
+    {
+        await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
+        var userId = Guid.NewGuid();
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var controller = OrganizationsControllerTestHelpers.CreatePermissionsController(db, userId);
+
+        var result = await controller.Create(organization.Id, new CreatePermissionRequest
+        {
+            Name = "Billing read",
+            Code = "billing.read",
+            Description = "Read billing"
+        }, CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result);
+        var permission = Assert.IsType<PermissionDetailResponse>(created.Value);
+        Assert.Equal("billing.read", permission.Code);
+        Assert.False(permission.IsSystem);
     }
 }
 
@@ -221,13 +213,40 @@ public class RolesControllerTests
         var result = await controller.Create(organization.Id, new CreateRoleRequest
         {
             Name = "Billing",
+            Description = "Billing managers",
             Scope = "ORG"
         }, CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(result);
-        var role = Assert.IsType<RoleResponse>(created.Value);
+        var role = Assert.IsType<RoleDetailResponse>(created.Value);
         Assert.Equal("Billing", role.Name);
+        Assert.Equal("Billing managers", role.Description);
         Assert.False(role.IsSystem);
+    }
+
+    [Fact]
+    public async Task AssignAndListRoleMembers_ShouldSucceed()
+    {
+        await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
+        var ownerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, memberId, roles.Member.Id);
+        await db.SaveChangesAsync();
+
+        var controller = OrganizationsControllerTestHelpers.CreateRolesController(db, ownerId);
+        var assignResult = await controller.AssignMember(
+            organization.Id,
+            roles.Admin.Id,
+            new AssignRoleMemberRequest { UserId = memberId },
+            CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(assignResult);
+
+        var listResult = await controller.ListMembers(organization.Id, roles.Admin.Id, CancellationToken.None);
+        var ok = Assert.IsType<OkObjectResult>(listResult);
+        var members = Assert.IsAssignableFrom<IReadOnlyList<MemberSummaryDto>>(ok.Value);
+        Assert.Contains(members, m => m.UserId == memberId);
     }
 }
 
@@ -241,13 +260,7 @@ public class TeamsControllerTests
         var memberId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.Add(new OrganizationMember
-        {
-            OrganizationId = organization.Id,
-            UserId = memberId,
-            RoleId = roles.Member.Id,
-            JoinedAt = DateTimeOffset.UtcNow
-        });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, memberId, roles.Member.Id);
         await db.SaveChangesAsync();
 
         var controller = OrganizationsControllerTestHelpers.CreateTeamsController(db, ownerId);
@@ -282,12 +295,13 @@ public class InvitationsControllerTests
         var createResult = await ownerController.Create(organization.Id, new CreateInvitationRequest
         {
             Email = "invitee@example.com",
-            OrgRoleId = roles.Member.Id
+            OrgRoleIds = [roles.Member.Id]
         }, CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(createResult);
         var invitation = Assert.IsType<InvitationResponse>(created.Value);
         Assert.NotNull(invitation.Token);
+        Assert.Equal([roles.Member.Id], invitation.OrgRoleIds);
 
         var inviteeController = OrganizationsControllerTestHelpers.CreateInvitationsController(db, inviteeId);
         var acceptResult = await inviteeController.Accept(invitation.Token!, CancellationToken.None);
@@ -295,6 +309,7 @@ public class InvitationsControllerTests
         var ok = Assert.IsType<OkObjectResult>(acceptResult);
         var member = Assert.IsType<MemberResponse>(ok.Value);
         Assert.Equal(inviteeId, member.UserId);
+        Assert.Contains(member.Roles, r => r.Id == roles.Member.Id);
     }
 }
 
@@ -312,7 +327,7 @@ public class MeControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var me = Assert.IsType<MeResponse>(ok.Value);
-        Assert.Equal(SystemRoleNames.Owner, me.RoleName);
+        Assert.Contains(me.Roles, r => r.Name == SystemRoleNames.Owner);
         Assert.Contains(OrganizationPermissionCodes.OrgDelete, me.Permissions);
     }
 }
@@ -327,13 +342,7 @@ public class OrganizationsControllerTransferLeaveTests
         var adminId = Guid.NewGuid();
         var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        db.OrganizationMembers.Add(new OrganizationMember
-        {
-            OrganizationId = organization.Id,
-            UserId = adminId,
-            RoleId = roles.Admin.Id,
-            JoinedAt = DateTimeOffset.UtcNow
-        });
+        OrganizationsControllerTestHelpers.AddMemberWithRole(db, organization.Id, adminId, roles.Admin.Id);
         await db.SaveChangesAsync();
 
         var controller = OrganizationsControllerTestHelpers.CreateController(db, ownerId);
@@ -348,7 +357,7 @@ public class OrganizationsControllerTransferLeaveTests
         var meResult = await meController.Get(organization.Id, CancellationToken.None);
         var ok = Assert.IsType<OkObjectResult>(meResult);
         var me = Assert.IsType<MeResponse>(ok.Value);
-        Assert.Equal(SystemRoleNames.Owner, me.RoleName);
+        Assert.Contains(me.Roles, r => r.Name == SystemRoleNames.Owner);
     }
 
     [Fact]

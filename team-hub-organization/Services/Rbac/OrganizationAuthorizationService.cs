@@ -45,15 +45,15 @@ public sealed class OrganizationAuthorizationService(OrganizationDbContext db) :
     }
 
     public Task<bool> IsOwnerAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default) =>
-        db.OrganizationMembers.AsNoTracking()
+        db.OrganizationMemberRoles.AsNoTracking()
             .Join(
                 db.Roles.AsNoTracking(),
-                member => member.RoleId,
+                assignment => assignment.RoleId,
                 role => role.Id,
-                (member, role) => new { member, role })
+                (assignment, role) => new { assignment, role })
             .AnyAsync(
-                x => x.member.OrganizationId == organizationId
-                     && x.member.UserId == userId
+                x => x.assignment.OrganizationId == organizationId
+                     && x.assignment.UserId == userId
                      && x.role.Name == SystemRoleNames.Owner
                      && x.role.Scope == RoleScope.Org,
                 cancellationToken);
@@ -73,11 +73,11 @@ public sealed class OrganizationAuthorizationService(OrganizationDbContext db) :
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        return await db.OrganizationMembers.AsNoTracking()
+        return await db.OrganizationMemberRoles.AsNoTracking()
             .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
             .Join(
                 db.RolePermissions.AsNoTracking(),
-                member => member.RoleId,
+                assignment => assignment.RoleId,
                 rp => rp.RoleId,
                 (_, rp) => rp.PermissionId)
             .Join(
