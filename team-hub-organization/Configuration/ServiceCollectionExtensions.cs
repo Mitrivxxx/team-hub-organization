@@ -12,7 +12,14 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
+using team_hub_organization.Services.Me;
+using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.Invitations;
+using team_hub_organization.Services.Members.Permissions;
+using team_hub_organization.Services.Members.Roles;
 using team_hub_organization.Services.Organizations;
+using team_hub_organization.Services.Rbac;
+using team_hub_organization.Services.Teams;
 
 namespace team_hub_organization.Configuration;
 
@@ -73,7 +80,6 @@ public static class ServiceCollectionExtensions
         services.AddControllers();
         services.AddApiVersioning(options =>
             {
-                // Asp.Versioning uses major.minor; public SemVer 0.1.0 is exposed in the URL path.
                 options.DefaultApiVersion = new ApiVersion(0, 1);
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.ReportApiVersions = true;
@@ -135,8 +141,17 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddTeamHubBlobStorage(configuration);
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IOrganizationAuthorizationService, OrganizationAuthorizationService>();
+        services.AddScoped<IPermissionSeedService, PermissionSeedService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IOrganizationAvatarService, OrganizationAvatarService>();
+        services.AddScoped<IMemberService, MemberService>();
+        services.AddScoped<IRoleService, RoleService>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<ITeamService, TeamService>();
+        services.AddScoped<ITeamAvatarService, TeamAvatarService>();
+        services.AddScoped<IInvitationService, InvitationService>();
+        services.AddScoped<IMeService, MeService>();
         return services;
     }
 }

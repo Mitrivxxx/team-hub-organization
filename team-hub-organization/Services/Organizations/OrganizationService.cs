@@ -3,13 +3,15 @@ using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Rbac;
 
 namespace team_hub_organization.Services.Organizations;
 
-public sealed class OrganizationService(OrganizationDbContext db, IServiceProvider serviceProvider) : IOrganizationService
+public sealed class OrganizationService(
+    OrganizationDbContext db,
+    IOrganizationAuthorizationService authz,
+    IServiceProvider serviceProvider) : IOrganizationService
 {
-    public const string OwnerRoleName = "Owner";
-
     IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
 
     public async Task<OrganizationResponse> CreateAsync(CreateOrganizationRequest request, Guid userId, CancellationToken cancellationToken = default)
@@ -42,25 +44,18 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
             UpdatedAt = now
         };
 
-        var ownerRole = new Role
-        {
-            Id = Guid.NewGuid(),
-            OrganizationId = organization.Id,
-            Name = OwnerRoleName,
-            Scope = RoleScope.Org,
-            CreatedAt = now
-        };
+        db.Organizations.Add(organization);
+
+        var seeded = await OrganizationRoleSeeder.SeedSystemRolesAsync(db, organization.Id, now, cancellationToken);
 
         var member = new OrganizationMember
         {
             OrganizationId = organization.Id,
             UserId = userId,
-            RoleId = ownerRole.Id,
+            RoleId = seeded.Owner.Id,
             JoinedAt = now
         };
 
-        db.Organizations.Add(organization);
-        db.Roles.Add(ownerRole);
         db.OrganizationMembers.Add(member);
 
         if (db.Database.IsRelational())
@@ -117,9 +112,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         if (organization is null)
             return null;
 
-        if (!await IsMemberAsync(organizationId, userId, cancellationToken))
-            throw new OrganizationAccessException("User is not a member of this organization.");
-
+        await authz.EnsureMemberAsync(organizationId, userId, cancellationToken);
         return ToResponse(organization);
     }
 
@@ -133,9 +126,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         if (organization is null)
             return null;
 
-        if (!await IsMemberAsync(organization.Id, userId, cancellationToken))
-            throw new OrganizationAccessException("User is not a member of this organization.");
-
+        await authz.EnsureMemberAsync(organization.Id, userId, cancellationToken);
         return ToResponse(organization);
     }
 
@@ -147,8 +138,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         if (organization is null)
             return null;
 
-        if (!await IsMemberAsync(organizationId, userId, cancellationToken))
-            throw new OrganizationAccessException("User is not a member of this organization.");
+        await authz.EnsurePermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgManage, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(request.Name))
             organization.Name = request.Name.Trim();
@@ -170,8 +160,7 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         if (organization is null)
             return false;
 
-        if (!await IsOwnerAsync(organizationId, userId, cancellationToken))
-            throw new OrganizationAccessException("Only organization owners can delete the organization.");
+        await authz.EnsurePermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgDelete, cancellationToken);
 
         organization.DeletedAt = DateTimeOffset.UtcNow;
         organization.UpdatedAt = organization.DeletedAt.Value;
@@ -180,23 +169,80 @@ public sealed class OrganizationService(OrganizationDbContext db, IServiceProvid
         return true;
     }
 
-    async Task<bool> IsMemberAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken) =>
-        await db.OrganizationMembers.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
+    public async Task TransferOwnershipAsync(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid newOwnerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (actorUserId == newOwnerUserId)
+            throw new OrganizationValidationException("Cannot transfer ownership to yourself.");
 
-    async Task<bool> IsOwnerAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken) =>
-        await db.OrganizationMembers.AsNoTracking()
+        await authz.EnsureOwnerAsync(organizationId, actorUserId, cancellationToken);
+
+        var ownerRole = await db.Roles
+            .FirstOrDefaultAsync(
+                r => r.OrganizationId == organizationId
+                     && r.Name == SystemRoleNames.Owner
+                     && r.Scope == RoleScope.Org,
+                cancellationToken)
+            ?? throw new OrganizationValidationException("Owner role was not found.");
+
+        var adminRole = await db.Roles
+            .FirstOrDefaultAsync(
+                r => r.OrganizationId == organizationId
+                     && r.Name == SystemRoleNames.Admin
+                     && r.Scope == RoleScope.Org,
+                cancellationToken)
+            ?? throw new OrganizationValidationException("Admin role was not found.");
+
+        var actor = await db.OrganizationMembers
+            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == actorUserId, cancellationToken)
+            ?? throw new OrganizationAccessException("User is not a member of this organization.");
+
+        var target = await db.OrganizationMembers
+            .FirstOrDefaultAsync(m => m.OrganizationId == organizationId && m.UserId == newOwnerUserId, cancellationToken)
+            ?? throw new OrganizationValidationException("New owner must already be an organization member.");
+
+        actor.RoleId = adminRole.Id;
+        target.RoleId = ownerRole.Id;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task LeaveAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        await authz.EnsureMemberAsync(organizationId, userId, cancellationToken);
+
+        if (await authz.IsOwnerAsync(organizationId, userId, cancellationToken))
+        {
+            var ownerCount = await db.OrganizationMembers
+                .Join(db.Roles, m => m.RoleId, r => r.Id, (m, r) => new { m, r })
+                .CountAsync(
+                    x => x.m.OrganizationId == organizationId
+                         && x.r.Name == SystemRoleNames.Owner
+                         && x.r.Scope == RoleScope.Org,
+                    cancellationToken);
+
+            if (ownerCount <= 1)
+                throw new OrganizationConflictException("Owner cannot leave without transferring ownership first.");
+        }
+
+        var member = await db.OrganizationMembers
+            .FirstAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
+
+        var teamMemberships = await db.TeamMembers
+            .Where(tm => tm.UserId == userId)
             .Join(
-                db.Roles.AsNoTracking(),
-                member => member.RoleId,
-                role => role.Id,
-                (member, role) => new { member, role })
-            .AnyAsync(
-                x => x.member.OrganizationId == organizationId
-                     && x.member.UserId == userId
-                     && x.role.Name == OwnerRoleName
-                     && x.role.Scope == RoleScope.Org,
-                cancellationToken);
+                db.Teams.Where(t => t.OrganizationId == organizationId),
+                tm => tm.TeamId,
+                t => t.Id,
+                (tm, _) => tm)
+            .ToListAsync(cancellationToken);
+
+        db.TeamMembers.RemoveRange(teamMemberships);
+        db.OrganizationMembers.Remove(member);
+        await db.SaveChangesAsync(cancellationToken);
+    }
 
     OrganizationResponse ToResponse(Organization organization) => new()
     {

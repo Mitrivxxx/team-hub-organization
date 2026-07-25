@@ -11,7 +11,7 @@ public class OrganizationsControllerGetTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
         var result = await controller.GetById(organization.Id, CancellationToken.None);
@@ -25,7 +25,7 @@ public class OrganizationsControllerGetTests
     public async Task GetById_WhenUserIsNotMember_ShouldReturnForbidden()
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, Guid.NewGuid());
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, Guid.NewGuid());
         var controller = OrganizationsControllerTestHelpers.CreateController(db, Guid.NewGuid());
 
         var result = await controller.GetById(organization.Id, CancellationToken.None);
@@ -39,7 +39,7 @@ public class OrganizationsControllerGetTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId, slug: "acme");
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId, slug: "acme");
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
         var result = await controller.GetBySlug("acme", CancellationToken.None);
@@ -54,7 +54,7 @@ public class OrganizationsControllerGetTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         organization.DeletedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 

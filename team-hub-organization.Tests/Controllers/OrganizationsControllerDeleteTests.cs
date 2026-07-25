@@ -11,7 +11,7 @@ public class OrganizationsControllerDeleteTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
         var result = await controller.Delete(organization.Id, CancellationToken.None);
@@ -28,23 +28,13 @@ public class OrganizationsControllerDeleteTests
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var ownerId = Guid.NewGuid();
         var memberId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
+        var (organization, _, _, roles) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
-        var memberRole = new team_hub_organization.Models.Role
-        {
-            Id = Guid.NewGuid(),
-            OrganizationId = organization.Id,
-            Name = "Member",
-            Scope = team_hub_organization.Models.RoleScope.Org,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        db.Roles.Add(memberRole);
         db.OrganizationMembers.Add(new team_hub_organization.Models.OrganizationMember
         {
             OrganizationId = organization.Id,
             UserId = memberId,
-            RoleId = memberRole.Id,
+            RoleId = roles.Member.Id,
             JoinedAt = DateTimeOffset.UtcNow
         });
         await db.SaveChangesAsync();

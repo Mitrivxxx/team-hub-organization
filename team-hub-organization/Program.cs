@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TeamHub.Observability;
 using team_hub_organization.Configuration;
 using team_hub_organization.Data;
+using team_hub_organization.Services.Rbac;
 
 Env.TraversePath().Load();
 
@@ -24,7 +25,9 @@ var app = builder.Build();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<OrganizationDbContext>().Database.Migrate();
+    var db = scope.ServiceProvider.GetRequiredService<OrganizationDbContext>();
+    db.Database.Migrate();
+    await scope.ServiceProvider.GetRequiredService<IPermissionSeedService>().EnsureCatalogAsync();
 }
 
 app.UseApiPipeline();

@@ -11,7 +11,7 @@ public class OrganizationsControllerUpdateTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId, slug: "acme");
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId, slug: "acme");
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
         var result = await controller.Update(organization.Id, new UpdateOrganizationRequest

@@ -13,7 +13,7 @@ public class OrganizationsControllerAvatarTests
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var blobStorage = new FakeBlobStorageService();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId, blobStorageService: blobStorage);
 
         await using var stream = new MemoryStream([0xFF, 0xD8, 0xFF]);
@@ -39,7 +39,7 @@ public class OrganizationsControllerAvatarTests
     {
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
         await using var stream = new MemoryStream([1, 2, 3]);
@@ -60,7 +60,7 @@ public class OrganizationsControllerAvatarTests
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var blobStorage = new FakeBlobStorageService();
         var userId = Guid.NewGuid();
-        var (organization, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         organization.AvatarUrl = $"organizations/{organization.Id}/avatar.png";
         await db.SaveChangesAsync();
         await blobStorage.UploadAsync(organization.AvatarUrl, new MemoryStream([1, 2, 3]), "image/png");

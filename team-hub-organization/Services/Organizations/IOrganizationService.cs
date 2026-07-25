@@ -10,6 +10,8 @@ public interface IOrganizationService
     Task<OrganizationResponse?> GetBySlugAsync(string slug, Guid userId, CancellationToken cancellationToken = default);
     Task<OrganizationResponse?> UpdateAsync(Guid organizationId, UpdateOrganizationRequest request, Guid userId, CancellationToken cancellationToken = default);
     Task<bool> SoftDeleteAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+    Task TransferOwnershipAsync(Guid organizationId, Guid actorUserId, Guid newOwnerUserId, CancellationToken cancellationToken = default);
+    Task LeaveAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
 }
 
 public sealed class OrganizationAccessException : Exception
@@ -20,4 +22,14 @@ public sealed class OrganizationAccessException : Exception
 public sealed class OrganizationConflictException : Exception
 {
     public OrganizationConflictException(string message) : base(message) { }
+}
+
+public sealed class OrganizationNotFoundException : Exception
+{
+    public OrganizationNotFoundException(string message = "Organization was not found.") : base(message) { }
+}
+
+public sealed class OrganizationValidationException : Exception
+{
+    public OrganizationValidationException(string message) : base(message) { }
 }

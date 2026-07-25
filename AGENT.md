@@ -1,27 +1,41 @@
 ## Purpose
-- Organization microservice for Team Hub (organizations, teams, memberships, invitations).
+- Organization microservice for Team Hub (organizations, teams, memberships, roles/permissions, invitations).
 
 ## Source of truth
 - `team-hub-organization/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
 - `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
 - `team-hub-organization/Migrations/*` (schema)
 - `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`, `BlobStorage:*` dev)
+- `docs/organization.mb` (API contract)
 - `aspire/TeamHub.ServiceDefaults/Extensions.cs`
 - `building-blocks/TeamHub.Observability/`
 - `building-blocks/TeamHub.BlobStorage/` (dev avatar storage)
 
+## Code layout (Members)
+- Controllers / Models / Services mirror manage UI tabs under `Members/`:
+  - `AllMembers` — org members CRUD + member teams
+  - `Invitations` — org invitations + token accept/reject + `/me/invitations`
+  - `Roles` — org/team role CRUD + role↔permission attach
+  - `Permissions` — global permission catalog (`GET /permissions`)
+  - `Activity` — placeholder (empty)
+  - `ImportExport` — placeholder (empty)
+- Models keep namespace `team_hub_organization.Models` (EF migrations stable); folders only.
+- Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Me`, `Services/Rbac`.
+
 ## Do
-- Endpoints:
+- Endpoints (base `/api/organizations/v0.1.0`, JWT required):
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
-  - `POST /api/organizations/v0.1.0` — create org + creator as Owner member (`201`, `409` slug conflict); body: `name`, optional `slug`, optional `description`
-  - `GET /api/organizations/v0.1.0` — list current user organizations
-  - `GET /api/organizations/v0.1.0/{orgId}` — organization details (member only)
-  - `GET /api/organizations/v0.1.0/by-slug/{slug}` — lookup by slug (member only)
-  - `PATCH /api/organizations/v0.1.0/{orgId}` — update `name` and/or `description` (slug unchanged)
-  - `PUT /api/organizations/v0.1.0/{orgId}/avatar` — upload avatar (`multipart/form-data`, field `file`; JPEG/PNG/WebP, max 2 MB; member-only)
-  - `DELETE /api/organizations/v0.1.0/{orgId}/avatar` — remove avatar (member-only)
-  - `DELETE /api/organizations/v0.1.0/{orgId}` — soft delete (`DeletedAt`; Owner only)
+  - Organization: `POST /`, `GET /`, `GET /{orgId}`, `GET /by-slug/{slug}`, `PATCH /{orgId}`, `PUT|DELETE /{orgId}/avatar`, `DELETE /{orgId}`, `POST /{orgId}/transfer-ownership`, `POST /{orgId}/leave`
+  - Members: `GET|POST /{orgId}/members` (`GET` optional `?roleId=&teamId=`), `GET|PATCH|DELETE /{orgId}/members/{userId}`, `GET /{orgId}/members/{userId}/teams`
+  - Teams: CRUD under `/{orgId}/teams`, avatar, team members CRUD
+  - Roles: CRUD `/{orgId}/roles`, permission attach/replace/remove
+  - Permissions: `GET /permissions`
+  - Invitations: org-scoped list/create/get/cancel/resend; `invitations/by-token/{token}` get/accept/reject
+  - Me: `GET /{orgId}/me`, `GET /me/invitations`
+- See `docs/organization.mb` for request bodies, status codes, and authZ rules.
+- RBAC: global permission catalog; org-scoped roles (`ORG` | `TEAM`); members assigned via `RoleId`.
+- System roles on org create: Owner, Admin, Member (org) + TeamLead, Member (team). Owner gets all permissions; Admin all except `org.delete`.
 - API versioning: URL path `/api/organizations/v0.1.0/*` (SemVer `0.1.0`; Asp.Versioning major.minor `0.1`, packages `Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0).
 - Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
 - Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
@@ -35,7 +49,7 @@
 - Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
 - Docker healthcheck interval: `120s` (`docker-compose.yml` + `Dockerfile`).
 - Keep this file updated after API, port, or observability changes.
-- Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup).
+- Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup). Permission catalog seeded after migrate.
 - Connection string:
   - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db`
   - docker prod compose: `Database=organizationdb`
@@ -54,3 +68,4 @@
 ## Don't
 - Do not add domain routes without updating gateway and docs.
 - Do not bypass gateway for frontend API calls.
+- Do not store user profiles (auth owns users).

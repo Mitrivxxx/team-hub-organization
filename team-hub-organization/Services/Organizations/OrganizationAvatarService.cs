@@ -3,11 +3,13 @@ using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Rbac;
 
 namespace team_hub_organization.Services.Organizations;
 
 public sealed class OrganizationAvatarService(
     OrganizationDbContext db,
+    IOrganizationAuthorizationService authz,
     IServiceProvider serviceProvider) : IOrganizationAvatarService
 {
     const long MaxFileSizeBytes = 2 * 1024 * 1024;
@@ -37,8 +39,7 @@ public sealed class OrganizationAvatarService(
         if (organization is null)
             return null;
 
-        if (!await IsMemberAsync(organizationId, userId, cancellationToken))
-            throw new OrganizationAccessException("User is not a member of this organization.");
+        await authz.EnsurePermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgManage, cancellationToken);
 
         var extension = AllowedContentTypes[file.ContentType];
         var blobName = BlobStoragePaths.OrganizationAvatar(organizationId, extension);
@@ -72,8 +73,7 @@ public sealed class OrganizationAvatarService(
         if (organization is null)
             return null;
 
-        if (!await IsMemberAsync(organizationId, userId, cancellationToken))
-            throw new OrganizationAccessException("User is not a member of this organization.");
+        await authz.EnsurePermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgManage, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(organization.AvatarUrl))
         {
@@ -98,15 +98,12 @@ public sealed class OrganizationAvatarService(
             throw new OrganizationAvatarValidationException("Avatar must be a JPEG, PNG, or WebP image.");
     }
 
-    async Task<bool> IsMemberAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken) =>
-        await db.OrganizationMembers.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == organizationId && m.UserId == userId, cancellationToken);
-
     static OrganizationResponse ToResponse(Organization organization, IBlobStorageService blobStorage) => new()
     {
         Id = organization.Id,
         Name = organization.Name,
         Slug = organization.Slug,
+        Description = organization.Description,
         AvatarUrl = ResolveAvatarUrl(organization.AvatarUrl, blobStorage),
         CreatedAt = organization.CreatedAt,
         UpdatedAt = organization.UpdatedAt
