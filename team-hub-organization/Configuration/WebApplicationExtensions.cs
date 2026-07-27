@@ -1,4 +1,5 @@
 using Asp.Versioning.ApiExplorer;
+using team_hub_organization.Grpc;
 
 namespace team_hub_organization.Configuration;
 
@@ -32,6 +33,7 @@ public static class WebApplicationExtensions
 
         app.MapHealthChecks("/health");
         app.MapControllers();
+        app.MapGrpcService<OrganizationMemberGrpcService>();
 
         return app;
     }

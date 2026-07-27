@@ -3,11 +3,15 @@ WORKDIR /src
 
 COPY aspire/TeamHub.ServiceDefaults/TeamHub.ServiceDefaults.csproj aspire/TeamHub.ServiceDefaults/
 COPY building-blocks/TeamHub.Observability/TeamHub.Observability.csproj building-blocks/TeamHub.Observability/
+COPY building-blocks/TeamHub.BlobStorage/TeamHub.BlobStorage.csproj building-blocks/TeamHub.BlobStorage/
+COPY building-blocks/TeamHub.GrpcContracts/TeamHub.GrpcContracts.csproj building-blocks/TeamHub.GrpcContracts/
 COPY services/team-hub-organization/team-hub-organization/team-hub-organization.csproj services/team-hub-organization/team-hub-organization/
 RUN dotnet restore services/team-hub-organization/team-hub-organization/team-hub-organization.csproj
 
 COPY aspire/TeamHub.ServiceDefaults/ aspire/TeamHub.ServiceDefaults/
 COPY building-blocks/TeamHub.Observability/ building-blocks/TeamHub.Observability/
+COPY building-blocks/TeamHub.BlobStorage/ building-blocks/TeamHub.BlobStorage/
+COPY building-blocks/TeamHub.GrpcContracts/ building-blocks/TeamHub.GrpcContracts/
 COPY services/team-hub-organization/team-hub-organization/ services/team-hub-organization/team-hub-organization/
 RUN dotnet publish services/team-hub-organization/team-hub-organization/team-hub-organization.csproj -c Release -o /app/publish
 
@@ -23,8 +27,9 @@ RUN chown -R app:app /app
 
 USER app
 
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_URLS=
 EXPOSE 8080
+EXPOSE 8081
 
 HEALTHCHECK --interval=120s --timeout=5s --start-period=15s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1

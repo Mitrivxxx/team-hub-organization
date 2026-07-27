@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITeamAvatarService, TeamAvatarService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IMeService, MeService>();
+        services.AddGrpc();
         return services;
     }
 }
