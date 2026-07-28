@@ -210,8 +210,9 @@ namespace team_hub_organization.Migrations
                 UPDATE role_permissions rp
                 SET "PermissionId" = r.new_id
                 FROM roles role
-                JOIN permission_remap r ON r.organization_id = role."OrganizationId" AND r.old_id = rp."PermissionId"
-                WHERE rp."RoleId" = role."Id";
+                JOIN permission_remap r ON r.organization_id = role."OrganizationId"
+                WHERE rp."RoleId" = role."Id"
+                  AND r.old_id = rp."PermissionId";
 
                 DELETE FROM permissions
                 WHERE "OrganizationId" IS NULL;
