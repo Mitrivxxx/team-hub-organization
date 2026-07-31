@@ -14,12 +14,27 @@ public class OrganizationsControllerCreateTests
         var userId = Guid.NewGuid();
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
-        var result = await controller.Create(new CreateOrganizationRequest { Name = "Acme Corp" }, CancellationToken.None);
+        var result = await controller.Create(new CreateOrganizationRequest
+        {
+            Name = "Acme Corp",
+            Nip = "1234567890",
+            Address = new OrganizationAddressDto
+            {
+                Country = "Poland",
+                City = "Warsaw",
+                PostalCode = "00-001"
+            }
+        }, CancellationToken.None);
 
         var created = Assert.IsType<CreatedAtActionResult>(result);
         var response = Assert.IsType<OrganizationResponse>(created.Value);
         Assert.Equal("Acme Corp", response.Name);
         Assert.Equal("acme-corp", response.Slug);
+        Assert.Equal("1234567890", response.Nip);
+        Assert.Equal("Poland", response.Address.Country);
+        Assert.Equal("Warsaw", response.Address.City);
+        Assert.Equal("00-001", response.Address.PostalCode);
+        Assert.Matches(@"^acmecorp\d{4}@teamhub\.local$", response.Email);
 
         var member = await db.OrganizationMembers
             .SingleAsync(m => m.UserId == userId);
@@ -43,7 +58,14 @@ public class OrganizationsControllerCreateTests
         var result = await controller.Create(new CreateOrganizationRequest
         {
             Name = "Acme",
-            Slug = "acme"
+            Slug = "acme",
+            Nip = "1234567890",
+            Address = new OrganizationAddressDto
+            {
+                Country = "Poland",
+                City = "Warsaw",
+                PostalCode = "00-001"
+            }
         }, CancellationToken.None);
 
         Assert.IsType<ConflictObjectResult>(result);

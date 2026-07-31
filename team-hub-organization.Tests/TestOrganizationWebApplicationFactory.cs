@@ -93,11 +93,23 @@ public class OrganizationsIntegrationTests : IClassFixture<TestOrganizationWebAp
     public async Task Create_WithToken_ShouldReturnCreated()
     {
         var client = _factory.CreateAuthenticatedClient(Guid.NewGuid());
-        var response = await client.PostAsJsonAsync("/api/organizations/v0.1.0", new CreateOrganizationRequest { Name = "Acme" });
+        var response = await client.PostAsJsonAsync("/api/organizations/v0.1.0", new CreateOrganizationRequest
+        {
+            Name = "Acme",
+            Nip = "1234567890",
+            Address = new OrganizationAddressDto
+            {
+                Country = "Poland",
+                City = "Warsaw",
+                PostalCode = "00-001"
+            }
+        });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var organization = await response.Content.ReadFromJsonAsync<OrganizationResponse>();
         Assert.NotNull(organization);
         Assert.Equal("acme", organization.Slug);
+        Assert.Equal("1234567890", organization.Nip);
+        Assert.Matches(@"^acme\d{4}@teamhub\.local$", organization.Email);
     }
 }

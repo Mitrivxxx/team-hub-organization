@@ -22,9 +22,18 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
         {
             e.ToTable("organizations");
             e.HasIndex(o => o.Slug).IsUnique();
+            e.HasIndex(o => o.Email).IsUnique().HasFilter("\"Email\" <> ''");
             e.Property(o => o.Name).HasMaxLength(100);
             e.Property(o => o.Slug).HasMaxLength(100);
             e.Property(o => o.Description).HasMaxLength(500);
+            e.Property(o => o.Nip).HasMaxLength(20);
+            e.Property(o => o.Email).HasMaxLength(255);
+            e.OwnsOne(o => o.Address, a =>
+            {
+                a.Property(x => x.Country).HasColumnName("Country").HasMaxLength(100);
+                a.Property(x => x.City).HasColumnName("City").HasMaxLength(100);
+                a.Property(x => x.PostalCode).HasColumnName("PostalCode").HasMaxLength(20);
+            });
         });
 
         modelBuilder.Entity<Permission>(e =>

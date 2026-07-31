@@ -6,6 +6,9 @@ public class Organization
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string? Description { get; set; }
+    public string Nip { get; set; } = "";
+    public string Email { get; set; } = "";
+    public OrganizationAddress Address { get; set; } = new();
     public string? AvatarUrl { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

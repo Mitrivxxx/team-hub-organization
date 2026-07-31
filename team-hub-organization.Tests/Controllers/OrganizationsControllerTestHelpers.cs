@@ -145,6 +145,14 @@ internal static class OrganizationsControllerTestHelpers
             Id = Guid.NewGuid(),
             Name = name,
             Slug = slug,
+            Nip = "0000000000",
+            Email = $"{slug}{Random.Shared.Next(0, 10000):D4}@teamhub.local",
+            Address = new OrganizationAddress
+            {
+                Country = "Poland",
+                City = "Warsaw",
+                PostalCode = "00-001"
+            },
             CreatedAt = now,
             UpdatedAt = now
         };

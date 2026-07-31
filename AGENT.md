@@ -27,7 +27,10 @@
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
   - Organization: `POST /`, `GET /`, `GET /{orgId}`, `GET /by-slug/{slug}`, `PATCH /{orgId}`, `PUT|DELETE /{orgId}/avatar`, `DELETE /{orgId}`, `POST /{orgId}/transfer-ownership`, `POST /{orgId}/leave`
+    - Create body: `name`, optional `slug`/`description`, required `nip` (10 digits) + `address` (`country`, `city`, `postalCode`); response includes auto-generated `email` (`{name}{4digits}@teamhub.local`)
+    - Organization model fields: `Nip`, `Email`, owned `Address` (`Country`, `City`, `PostalCode`)
   - Members: `GET|POST /{orgId}/members` (`GET` optional `?roleId=&teamId=`), `GET|PATCH|DELETE /{orgId}/members/{userId}`, `GET /{orgId}/members/{userId}/teams` — body uses `roleIds[]`
+  - Membership lookup uses composite PK `(OrganizationId, UserId)` on `organization_members` (conflict check on add).
 - Internal gRPC (not via gateway): `OrganizationMemberService.ListMembers` on port `5102` (dev) / `8081` (docker); reuses `IMemberService.ListAsync`.
 - Kestrel: REST/health on `8080` (Http1AndHttp2), gRPC on `8081` (Http2 only).
 - Shared contracts: `building-blocks/TeamHub.GrpcContracts` (`Protos/organization/v1/members.proto`).

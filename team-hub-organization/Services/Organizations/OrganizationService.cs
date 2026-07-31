@@ -34,12 +34,25 @@ public sealed class OrganizationService(
                 throw new OrganizationConflictException("Organization slug is already taken.");
         }
 
+        var email = await OrganizationEmailHelper.GenerateUniqueEmailAsync(
+            candidate => db.Organizations.AnyAsync(o => o.Email == candidate, cancellationToken),
+            request.Name,
+            cancellationToken);
+
         var organization = new Organization
         {
             Id = Guid.NewGuid(),
             Name = request.Name.Trim(),
             Slug = slug,
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            Nip = request.Nip.Trim(),
+            Email = email,
+            Address = new OrganizationAddress
+            {
+                Country = request.Address.Country.Trim(),
+                City = request.Address.City.Trim(),
+                PostalCode = request.Address.PostalCode.Trim()
+            },
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -150,6 +163,16 @@ public sealed class OrganizationService(
 
         if (request.Description is not null)
             organization.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+
+        if (request.Nip is not null)
+            organization.Nip = request.Nip.Trim();
+
+        if (request.Address is not null)
+        {
+            organization.Address.Country = request.Address.Country.Trim();
+            organization.Address.City = request.Address.City.Trim();
+            organization.Address.PostalCode = request.Address.PostalCode.Trim();
+        }
 
         organization.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
@@ -297,6 +320,14 @@ public sealed class OrganizationService(
         Name = organization.Name,
         Slug = organization.Slug,
         Description = organization.Description,
+        Nip = organization.Nip,
+        Email = organization.Email,
+        Address = new OrganizationAddressDto
+        {
+            Country = organization.Address.Country,
+            City = organization.Address.City,
+            PostalCode = organization.Address.PostalCode
+        },
         AvatarUrl = OrganizationAvatarService.ResolveAvatarUrl(organization.AvatarUrl, BlobStorage),
         CreatedAt = organization.CreatedAt,
         UpdatedAt = organization.UpdatedAt
