@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -10,7 +11,8 @@ namespace team_hub_organization.Services.Members.Invitations;
 
 public sealed class InvitationService(
     OrganizationDbContext db,
-    IOrganizationAuthorizationService authz) : IInvitationService
+    IOrganizationAuthorizationService authz,
+    IActivityRecorder activity) : IInvitationService
 {
     static readonly TimeSpan DefaultExpiry = TimeSpan.FromDays(7);
 
@@ -119,6 +121,20 @@ public sealed class InvitationService(
             });
         }
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.InvitationSent,
+            actorUserId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new
+            {
+                email,
+                roles = orgRoles.Select(r => r.Name).ToArray(),
+                teamId = request.TeamId
+            },
+            occurredAt: now);
+
         await db.SaveChangesAsync(cancellationToken);
         return await MapOneAsync(invitation, includeToken: true, cancellationToken);
     }
@@ -139,6 +155,13 @@ public sealed class InvitationService(
             throw new OrganizationConflictException("Only pending invitations can be cancelled.");
 
         invitation.Status = InvitationStatus.Expired;
+        activity.Record(
+            organizationId,
+            ActivityTypes.InvitationExpired,
+            actorUserId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new { email = invitation.Email, reason = "cancelled" });
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -160,6 +183,13 @@ public sealed class InvitationService(
         invitation.Token = GenerateToken();
         invitation.Status = InvitationStatus.Pending;
         invitation.ExpiresAt = DateTimeOffset.UtcNow.Add(DefaultExpiry);
+        activity.Record(
+            organizationId,
+            ActivityTypes.InvitationResent,
+            actorUserId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new { email = invitation.Email });
         await db.SaveChangesAsync(cancellationToken);
         return await MapOneAsync(invitation, includeToken: true, cancellationToken);
     }
@@ -235,6 +265,32 @@ public sealed class InvitationService(
         }
 
         invitation.Status = InvitationStatus.Accepted;
+
+        var roleNames = await db.Roles.AsNoTracking()
+            .Where(r => orgRoleIds.Contains(r.Id))
+            .Select(r => r.Name)
+            .OrderBy(n => n)
+            .ToListAsync(cancellationToken);
+
+        activity.Record(
+            invitation.OrganizationId,
+            ActivityTypes.InvitationAccepted,
+            userId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new { email = invitation.Email, roles = roleNames },
+            occurredAt: now);
+        activity.Record(
+            invitation.OrganizationId,
+            ActivityTypes.MemberJoined,
+            userId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: userId,
+            details: new { roles = roleNames, via = "invitation" },
+            occurredAt: now);
+
         await db.SaveChangesAsync(cancellationToken);
 
         var roles = await db.Roles.AsNoTracking()
@@ -279,6 +335,14 @@ public sealed class InvitationService(
             throw new OrganizationConflictException("Invitation is not pending.");
 
         invitation.Status = InvitationStatus.Rejected;
+        activity.Record(
+            invitation.OrganizationId,
+            ActivityTypes.InvitationRejected,
+            userId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new { email = invitation.Email });
         await db.SaveChangesAsync(cancellationToken);
         return await MapOneAsync(invitation, includeToken: false, cancellationToken);
     }
@@ -333,7 +397,16 @@ public sealed class InvitationService(
             return;
 
         foreach (var invitation in expired)
+        {
             invitation.Status = InvitationStatus.Expired;
+            activity.Record(
+                organizationId,
+                ActivityTypes.InvitationExpired,
+                actorUserId: null,
+                entityType: ActivityEntityTypes.Invitation,
+                entityId: invitation.Id,
+                details: new { email = invitation.Email, reason = "expired" });
+        }
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -349,7 +422,16 @@ public sealed class InvitationService(
             return;
 
         foreach (var invitation in expired)
+        {
             invitation.Status = InvitationStatus.Expired;
+            activity.Record(
+                invitation.OrganizationId,
+                ActivityTypes.InvitationExpired,
+                actorUserId: null,
+                entityType: ActivityEntityTypes.Invitation,
+                entityId: invitation.Id,
+                details: new { email = invitation.Email, reason = "expired" });
+        }
 
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -359,6 +441,13 @@ public sealed class InvitationService(
         if (invitation.Status == InvitationStatus.Pending && invitation.ExpiresAt <= DateTimeOffset.UtcNow)
         {
             invitation.Status = InvitationStatus.Expired;
+            activity.Record(
+                invitation.OrganizationId,
+                ActivityTypes.InvitationExpired,
+                actorUserId: null,
+                entityType: ActivityEntityTypes.Invitation,
+                entityId: invitation.Id,
+                details: new { email = invitation.Email, reason = "expired" });
             await db.SaveChangesAsync(cancellationToken);
         }
     }

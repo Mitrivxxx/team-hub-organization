@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -9,7 +10,8 @@ namespace team_hub_organization.Services.Members.AllMembers;
 
 public sealed class MemberService(
     OrganizationDbContext db,
-    IOrganizationAuthorizationService authz) : IMemberService
+    IOrganizationAuthorizationService authz,
+    IActivityRecorder activity) : IMemberService
 {
     public async Task<IReadOnlyList<MemberResponse>> ListAsync(
         Guid organizationId,
@@ -102,6 +104,16 @@ public sealed class MemberService(
             });
         }
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.MemberJoined,
+            actorUserId,
+            targetUserId: request.UserId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: request.UserId,
+            details: new { roles = roles.Select(r => r.Name).ToArray() },
+            occurredAt: now);
+
         await db.SaveChangesAsync(cancellationToken);
         return (await GetAsync(organizationId, request.UserId, actorUserId, cancellationToken))!;
     }
@@ -129,6 +141,12 @@ public sealed class MemberService(
             .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
             .ToListAsync(cancellationToken);
 
+        var fromRoleNames = await db.Roles.AsNoTracking()
+            .Where(r => existing.Select(e => e.RoleId).Contains(r.Id))
+            .Select(r => r.Name)
+            .OrderBy(n => n)
+            .ToListAsync(cancellationToken);
+
         var currentOwnerAssignment = await db.OrganizationMemberRoles
             .Where(m => m.OrganizationId == organizationId && m.UserId == userId)
             .Join(db.Roles, m => m.RoleId, r => r.Id, (m, r) => r)
@@ -150,6 +168,17 @@ public sealed class MemberService(
                 AssignedAt = now
             });
         }
+
+        var toRoleNames = newRoles.Select(r => r.Name).OrderBy(n => n).ToArray();
+        activity.Record(
+            organizationId,
+            ActivityTypes.MemberRolesChanged,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: userId,
+            details: new { fromRoles = fromRoleNames, toRoles = toRoleNames },
+            occurredAt: now);
 
         await db.SaveChangesAsync(cancellationToken);
         return await GetAsync(organizationId, userId, actorUserId, cancellationToken);
@@ -188,6 +217,15 @@ public sealed class MemberService(
         db.OrganizationMemberRoles.RemoveRange(roleAssignments);
         db.TeamMembers.RemoveRange(teamMemberships);
         db.OrganizationMembers.Remove(member);
+
+        activity.Record(
+            organizationId,
+            ActivityTypes.MemberLeft,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: userId);
+
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }

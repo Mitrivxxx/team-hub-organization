@@ -13,6 +13,7 @@ using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Me;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
@@ -152,6 +153,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITeamAvatarService, TeamAvatarService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IMeService, MeService>();
+        services.AddScoped<IActivityRecorder, ActivityRecorder>();
+        services.AddScoped<IActivityService, ActivityService>();
         services.AddGrpc();
         return services;
     }

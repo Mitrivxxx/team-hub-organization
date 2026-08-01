@@ -1,6 +1,8 @@
 using Grpc.Core;
 using TeamHub.GrpcContracts.Organization.V1;
 using team_hub_organization.Grpc;
+using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Tests.Controllers;
@@ -15,8 +17,10 @@ public class OrganizationMemberGrpcServiceTests
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var userId = Guid.NewGuid();
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var authz = new OrganizationAuthorizationService(db);
         var service = new OrganizationMemberGrpcService(
-            new MemberService(db, new OrganizationAuthorizationService(db)));
+            new MemberService(db, authz, new ActivityRecorder(db)),
+            new ActivityService(db, authz));
 
         var response = await service.ListMembers(
             new ListMembersRequest
@@ -37,8 +41,10 @@ public class OrganizationMemberGrpcServiceTests
         await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
         var ownerId = Guid.NewGuid();
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
+        var authz = new OrganizationAuthorizationService(db);
         var service = new OrganizationMemberGrpcService(
-            new MemberService(db, new OrganizationAuthorizationService(db)));
+            new MemberService(db, authz, new ActivityRecorder(db)),
+            new ActivityService(db, authz));
 
         var ex = await Assert.ThrowsAsync<RpcException>(() => service.ListMembers(
             new ListMembersRequest
@@ -49,6 +55,36 @@ public class OrganizationMemberGrpcServiceTests
             new TestServerCallContext()));
 
         Assert.Equal(StatusCode.PermissionDenied, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListActivity_ReturnsPagedItems()
+    {
+        await using var db = OrganizationsControllerTestHelpers.CreateDbContext();
+        var userId = Guid.NewGuid();
+        var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
+        var authz = new OrganizationAuthorizationService(db);
+        var activity = new ActivityRecorder(db);
+        activity.Record(organization.Id, ActivityTypes.OrganizationUpdated, userId, details: new { name = "Acme" });
+        await db.SaveChangesAsync();
+
+        var service = new OrganizationMemberGrpcService(
+            new MemberService(db, authz, activity),
+            new ActivityService(db, authz));
+
+        var response = await service.ListActivity(
+            new ListActivityRequest
+            {
+                OrganizationId = organization.Id.ToString(),
+                ActorUserId = userId.ToString(),
+                Page = 1,
+                PageSize = 10
+            },
+            new TestServerCallContext());
+
+        Assert.Equal(1, response.TotalCount);
+        Assert.Single(response.Items);
+        Assert.Equal(ActivityTypes.OrganizationUpdated, response.Items[0].Type);
     }
 
     sealed class TestServerCallContext : ServerCallContext

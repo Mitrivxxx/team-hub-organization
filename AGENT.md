@@ -17,7 +17,7 @@
   - `Invitations` — org invitations + token accept/reject + `/me/invitations`
   - `Roles` — org/team role CRUD + role↔permission attach + role members
   - `Permissions` — org-scoped permission CRUD (`/{orgId}/permissions`)
-  - `Activity` — placeholder (empty)
+  - `Activity` — org activity feed (`GET /{orgId}/activity`) + `IActivityRecorder` writes from mutations
   - `ImportExport` — placeholder (empty)
 - Models keep namespace `team_hub_organization.Models` (EF migrations stable); folders only.
 - Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Me`, `Services/Rbac`.
@@ -31,10 +31,11 @@
     - Organization model fields: `Nip`, `Email`, owned `Address` (`Country`, `City`, `PostalCode`)
   - Members: `GET|POST /{orgId}/members` (`GET` optional `?roleId=&teamId=`), `GET|PATCH|DELETE /{orgId}/members/{userId}`, `GET /{orgId}/members/{userId}/teams` — body uses `roleIds[]`
   - Membership lookup uses composite PK `(OrganizationId, UserId)` on `organization_members` (conflict check on add).
-- Internal gRPC (not via gateway): `OrganizationMemberService.ListMembers` on port `5102` (dev) / `8081` (docker); reuses `IMemberService.ListAsync`.
+- Internal gRPC (not via gateway): `OrganizationMemberService.ListMembers` + `ListActivity` on port `5102` (dev) / `8081` (docker).
 - Kestrel: REST/health on `8080` (Http1AndHttp2), gRPC on `8081` (Http2 only).
 - Shared contracts: `building-blocks/TeamHub.GrpcContracts` (`Protos/organization/v1/members.proto`).
-- User profiles (name/surname) stay in auth; BFF GraphQL composes them for the All Members UI.
+- User profiles (name/surname) stay in auth; BFF GraphQL composes them for All Members and Activity UI.
+  - Activity: `GET /{orgId}/activity` (member-only; `type`, `q`, `from`, `to`, `page`, `pageSize`); append-only `organization_activities`
   - Teams: CRUD under `/{orgId}/teams`, avatar, team members CRUD
   - Roles: CRUD `/{orgId}/roles`, permission attach/replace/remove by `permissionId`, role members assign/list/revoke
   - Permissions: CRUD `/{orgId}/permissions` (org-scoped; system codes cloned on org create)

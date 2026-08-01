@@ -3,6 +3,7 @@ using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -11,6 +12,7 @@ namespace team_hub_organization.Services.Teams;
 public sealed class TeamService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
+    IActivityRecorder activity,
     IServiceProvider serviceProvider) : ITeamService
 {
     IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
@@ -72,6 +74,14 @@ public sealed class TeamService(
         };
 
         db.Teams.Add(team);
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamCreated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: team.Id,
+            details: new { teamName = team.Name },
+            occurredAt: now);
         await db.SaveChangesAsync(cancellationToken);
         return ToResponse(team, 0);
     }
@@ -98,6 +108,13 @@ public sealed class TeamService(
             team.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
 
         team.UpdatedAt = DateTimeOffset.UtcNow;
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamUpdated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: team.Id,
+            details: new { teamName = team.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         var count = await db.TeamMembers.CountAsync(tm => tm.TeamId == teamId, cancellationToken);
@@ -120,6 +137,13 @@ public sealed class TeamService(
 
         team.DeletedAt = DateTimeOffset.UtcNow;
         team.UpdatedAt = team.DeletedAt.Value;
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamDeleted,
+            actorUserId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: team.Id,
+            details: new { teamName = team.Name });
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -156,6 +180,7 @@ public sealed class TeamService(
             throw new OrganizationConflictException("User is already a member of this team.");
 
         var role = await GetTeamRoleAsync(organizationId, request.RoleId, cancellationToken);
+        var team = await FindTeamAsync(organizationId, teamId, cancellationToken);
 
         db.TeamMembers.Add(new TeamMember
         {
@@ -165,6 +190,14 @@ public sealed class TeamService(
             JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? null : request.JobTitle.Trim(),
             JoinedAt = DateTimeOffset.UtcNow
         });
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamMemberAdded,
+            actorUserId,
+            targetUserId: request.UserId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: teamId,
+            details: new { teamName = team!.Name, roleName = role.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return await QueryTeamMembers(teamId).FirstAsync(m => m.UserId == request.UserId, cancellationToken);
@@ -195,6 +228,20 @@ public sealed class TeamService(
         if (request.JobTitle is not null)
             member.JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? null : request.JobTitle.Trim();
 
+        var team = await FindTeamAsync(organizationId, teamId, cancellationToken);
+        var roleName = await db.Roles.AsNoTracking()
+            .Where(r => r.Id == member.RoleId)
+            .Select(r => r.Name)
+            .FirstAsync(cancellationToken);
+
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamMemberUpdated,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: teamId,
+            details: new { teamName = team!.Name, roleName, jobTitle = member.JobTitle });
         await db.SaveChangesAsync(cancellationToken);
         return await QueryTeamMembers(teamId).FirstAsync(m => m.UserId == userId, cancellationToken);
     }
@@ -217,7 +264,16 @@ public sealed class TeamService(
         if (member is null)
             return false;
 
+        var team = await FindTeamAsync(organizationId, teamId, cancellationToken);
         db.TeamMembers.Remove(member);
+        activity.Record(
+            organizationId,
+            ActivityTypes.TeamMemberRemoved,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Team,
+            entityId: teamId,
+            details: new { teamName = team!.Name });
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }

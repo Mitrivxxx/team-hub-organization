@@ -15,6 +15,7 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<InvitationOrgRole> InvitationOrgRoles => Set<InvitationOrgRole>();
+    public DbSet<OrganizationActivity> OrganizationActivities => Set<OrganizationActivity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +130,17 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.HasKey(x => new { x.InvitationId, x.RoleId });
             e.HasOne(x => x.Invitation).WithMany(i => i.OrgRoles).HasForeignKey(x => x.InvitationId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Role).WithMany(r => r.InvitationOrgRoles).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OrganizationActivity>(e =>
+        {
+            e.ToTable("organization_activities");
+            e.HasIndex(a => new { a.OrganizationId, a.OccurredAt });
+            e.HasIndex(a => new { a.OrganizationId, a.Type, a.OccurredAt });
+            e.Property(a => a.Type).HasMaxLength(64);
+            e.Property(a => a.EntityType).HasMaxLength(64);
+            e.Property(a => a.Details).HasColumnType("jsonb");
+            e.HasOne(a => a.Organization).WithMany().HasForeignKey(a => a.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

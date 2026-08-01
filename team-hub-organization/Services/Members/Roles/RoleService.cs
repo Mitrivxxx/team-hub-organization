@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -9,7 +10,8 @@ namespace team_hub_organization.Services.Members.Roles;
 
 public sealed class RoleService(
     OrganizationDbContext db,
-    IOrganizationAuthorizationService authz) : IRoleService
+    IOrganizationAuthorizationService authz,
+    IActivityRecorder activity) : IRoleService
 {
     public async Task<IReadOnlyList<RoleListItemResponse>> ListAsync(
         Guid organizationId,
@@ -73,6 +75,13 @@ public sealed class RoleService(
         };
 
         db.Roles.Add(role);
+        activity.Record(
+            organizationId,
+            ActivityTypes.RoleCreated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = request.Scope.ToUpperInvariant() });
         await db.SaveChangesAsync(cancellationToken);
 
         return (await GetAsync(organizationId, role.Id, actorUserId, cancellationToken))!;
@@ -119,6 +128,13 @@ public sealed class RoleService(
         if (request.Description is not null)
             role.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.RoleUpdated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = role.Scope == RoleScope.Org ? "ORG" : "TEAM" });
         await db.SaveChangesAsync(cancellationToken);
         return await GetAsync(organizationId, roleId, actorUserId, cancellationToken);
     }
@@ -146,6 +162,13 @@ public sealed class RoleService(
         if (inUse)
             throw new OrganizationConflictException("Role is in use and cannot be deleted.");
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.RoleDeleted,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = role.Scope == RoleScope.Org ? "ORG" : "TEAM" });
         db.Roles.Remove(role);
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -181,6 +204,18 @@ public sealed class RoleService(
         var existing = await db.RolePermissions.Where(rp => rp.RoleId == roleId).ToListAsync(cancellationToken);
         db.RolePermissions.RemoveRange(existing);
         db.RolePermissions.AddRange(permissions.Select(p => new RolePermission { RoleId = roleId, PermissionId = p.Id }));
+        activity.Record(
+            organizationId,
+            ActivityTypes.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Replaced",
+                permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
+            });
         await db.SaveChangesAsync(cancellationToken);
 
         return await LoadPermissionsAsync(roleId, cancellationToken);
@@ -210,6 +245,18 @@ public sealed class RoleService(
         foreach (var permission in permissions.Where(p => !existingSet.Contains(p.Id)))
             db.RolePermissions.Add(new RolePermission { RoleId = roleId, PermissionId = permission.Id });
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Added",
+                permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
+            });
         await db.SaveChangesAsync(cancellationToken);
         return await LoadPermissionsAsync(roleId, cancellationToken);
     }
@@ -231,7 +278,24 @@ public sealed class RoleService(
             .FirstOrDefaultAsync(rp => rp.RoleId == roleId && rp.PermissionId == permissionId, cancellationToken)
             ?? throw new OrganizationNotFoundException("Permission is not assigned to this role.");
 
+        var permissionCode = await db.Permissions.AsNoTracking()
+            .Where(p => p.Id == permissionId)
+            .Select(p => p.Code)
+            .FirstOrDefaultAsync(cancellationToken);
+
         db.RolePermissions.Remove(link);
+        activity.Record(
+            organizationId,
+            ActivityTypes.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Removed",
+                permissionCodes = permissionCode is null ? Array.Empty<string>() : new[] { permissionCode }
+            });
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -298,6 +362,14 @@ public sealed class RoleService(
             RoleId = roleId,
             AssignedAt = DateTimeOffset.UtcNow
         });
+        activity.Record(
+            organizationId,
+            ActivityTypes.RoleMemberAssigned,
+            actorUserId,
+            targetUserId: request.UserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new { roleName = role.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return new MemberSummaryDto { UserId = member.UserId, JoinedAt = member.JoinedAt };
@@ -335,6 +407,14 @@ public sealed class RoleService(
         }
 
         db.OrganizationMemberRoles.Remove(assignment);
+        activity.Record(
+            organizationId,
+            ActivityTypes.RoleMemberRevoked,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new { roleName = role.Name });
         await db.SaveChangesAsync(cancellationToken);
     }
 

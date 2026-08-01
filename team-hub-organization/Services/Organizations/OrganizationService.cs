@@ -3,6 +3,7 @@ using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Rbac;
 
 namespace team_hub_organization.Services.Organizations;
@@ -10,6 +11,7 @@ namespace team_hub_organization.Services.Organizations;
 public sealed class OrganizationService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
+    IActivityRecorder activity,
     IServiceProvider serviceProvider) : IOrganizationService
 {
     IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
@@ -175,6 +177,13 @@ public sealed class OrganizationService(
         }
 
         organization.UpdatedAt = DateTimeOffset.UtcNow;
+        activity.Record(
+            organizationId,
+            ActivityTypes.OrganizationUpdated,
+            userId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            details: new { name = organization.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return ToResponse(organization);
@@ -192,6 +201,13 @@ public sealed class OrganizationService(
 
         organization.DeletedAt = DateTimeOffset.UtcNow;
         organization.UpdatedAt = organization.DeletedAt.Value;
+        activity.Record(
+            organizationId,
+            ActivityTypes.OrganizationDeleted,
+            userId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            details: new { name = organization.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return true;
@@ -271,6 +287,14 @@ public sealed class OrganizationService(
             });
         }
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.OwnershipTransferred,
+            actorUserId,
+            targetUserId: newOwnerUserId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            occurredAt: now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -311,6 +335,14 @@ public sealed class OrganizationService(
         db.OrganizationMemberRoles.RemoveRange(roleAssignments);
         db.TeamMembers.RemoveRange(teamMemberships);
         db.OrganizationMembers.Remove(member);
+        activity.Record(
+            organizationId,
+            ActivityTypes.MemberLeft,
+            userId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: userId,
+            details: new { reason = "left" });
         await db.SaveChangesAsync(cancellationToken);
     }
 

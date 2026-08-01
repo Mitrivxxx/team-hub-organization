@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using TeamHub.BlobStorage;
 using team_hub_organization.Controllers;
 using team_hub_organization.Controllers.Me;
+using team_hub_organization.Controllers.Members.Activity;
 using team_hub_organization.Controllers.Members.AllMembers;
 using team_hub_organization.Controllers.Members.Invitations;
 using team_hub_organization.Controllers.Members.Permissions;
@@ -16,6 +17,7 @@ using team_hub_organization.Data;
 using team_hub_organization.Models;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Me;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
@@ -53,8 +55,9 @@ internal static class OrganizationsControllerTestHelpers
 
         var currentUserService = new TestCurrentUserService(userId);
         var authz = new OrganizationAuthorizationService(db);
+        var activity = new ActivityRecorder(db);
         var serviceProvider = CreateServiceProvider(blobStorageService);
-        organizationService ??= new OrganizationService(db, authz, serviceProvider);
+        organizationService ??= new OrganizationService(db, authz, activity, serviceProvider);
         organizationAvatarService ??= new OrganizationAvatarService(db, authz, serviceProvider);
 
         return new OrganizationsController(organizationService, organizationAvatarService, currentUserService, NullLogger<OrganizationsController>.Instance)
@@ -67,20 +70,23 @@ internal static class OrganizationsControllerTestHelpers
     }
 
     public static MembersController CreateMembersController(OrganizationDbContext db, Guid userId) =>
-        new(new MemberService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
+        new(new MemberService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
+
+    public static ActivityController CreateActivityController(OrganizationDbContext db, Guid userId) =>
+        new(new ActivityService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
 
     public static RolesController CreateRolesController(OrganizationDbContext db, Guid userId) =>
-        new(new RoleService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
+        new(new RoleService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
 
     public static PermissionsController CreatePermissionsController(OrganizationDbContext db, Guid userId) =>
-        new(new PermissionService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
+        new(new PermissionService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
 
     public static TeamsController CreateTeamsController(OrganizationDbContext db, Guid userId, IBlobStorageService? blob = null)
     {
         var authz = new OrganizationAuthorizationService(db);
         var sp = CreateServiceProvider(blob);
         return new TeamsController(
-            new TeamService(db, authz, sp),
+            new TeamService(db, authz, new ActivityRecorder(db), sp),
             new TeamAvatarService(db, authz, sp),
             new TestCurrentUserService(userId));
     }
@@ -89,7 +95,7 @@ internal static class OrganizationsControllerTestHelpers
     {
         var httpContext = new DefaultHttpContext { User = CreatePrincipal(userId, email) };
         return new InvitationsController(
-            new InvitationService(db, new OrganizationAuthorizationService(db)),
+            new InvitationService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)),
             new TestCurrentUserService(userId))
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
@@ -99,14 +105,15 @@ internal static class OrganizationsControllerTestHelpers
     public static MeController CreateMeController(OrganizationDbContext db, Guid userId)
     {
         var authz = new OrganizationAuthorizationService(db);
-        var members = new MemberService(db, authz);
+        var activity = new ActivityRecorder(db);
+        var members = new MemberService(db, authz, activity);
         return new MeController(new MeService(db, authz, members), new TestCurrentUserService(userId));
     }
 
     public static OrganizationService CreateOrganizationService(
         OrganizationDbContext db,
         IBlobStorageService? blobStorageService = null) =>
-        new(db, new OrganizationAuthorizationService(db), CreateServiceProvider(blobStorageService));
+        new(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db), CreateServiceProvider(blobStorageService));
 
     public static IOrganizationAvatarService CreateAvatarService(
         OrganizationDbContext db,

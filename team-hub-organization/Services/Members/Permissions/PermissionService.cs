@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -10,7 +11,8 @@ namespace team_hub_organization.Services.Members.Permissions;
 
 public sealed class PermissionService(
     OrganizationDbContext db,
-    IOrganizationAuthorizationService authz) : IPermissionService
+    IOrganizationAuthorizationService authz,
+    IActivityRecorder activity) : IPermissionService
 {
     static readonly Regex CodePattern = new(@"^[a-z][a-z0-9._-]*$", RegexOptions.Compiled);
 
@@ -95,6 +97,13 @@ public sealed class PermissionService(
         };
 
         db.Permissions.Add(permission);
+        activity.Record(
+            organizationId,
+            ActivityTypes.PermissionCreated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Permission,
+            entityId: permission.Id,
+            details: new { code = permission.Code, name = permission.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return await MapDetailAsync(permission, cancellationToken);
@@ -135,6 +144,13 @@ public sealed class PermissionService(
                 permission.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
         }
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.PermissionUpdated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Permission,
+            entityId: permission.Id,
+            details: new { code = permission.Code, name = permission.Name });
         await db.SaveChangesAsync(cancellationToken);
         return await MapDetailAsync(permission, cancellationToken);
     }
@@ -157,6 +173,13 @@ public sealed class PermissionService(
         if (await db.RolePermissions.AnyAsync(rp => rp.PermissionId == permissionId, cancellationToken))
             throw new OrganizationConflictException("Permission is in use by one or more roles and cannot be deleted.");
 
+        activity.Record(
+            organizationId,
+            ActivityTypes.PermissionDeleted,
+            actorUserId,
+            entityType: ActivityEntityTypes.Permission,
+            entityId: permission.Id,
+            details: new { code = permission.Code, name = permission.Name });
         db.Permissions.Remove(permission);
         await db.SaveChangesAsync(cancellationToken);
     }
