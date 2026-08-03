@@ -1,5 +1,3 @@
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Controllers;
 using team_hub_organization.Dtos;
@@ -9,13 +7,9 @@ using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Controllers.Members.ImportExport;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class ImportExportController(
     IImportExportService importExportService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>Preview member CSV import without writing.</summary>
     [HttpPost("{orgId:guid}/imports/preview")]

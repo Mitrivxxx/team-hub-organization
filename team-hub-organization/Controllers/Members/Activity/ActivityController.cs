@@ -1,5 +1,3 @@
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Controllers;
 using team_hub_organization.Dtos;
@@ -8,13 +6,9 @@ using team_hub_organization.Services.Members.Activity;
 
 namespace team_hub_organization.Controllers.Members.Activity;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class ActivityController(
     IActivityService activityService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>List organization activity feed.</summary>
     [HttpGet("{orgId:guid}/activity")]

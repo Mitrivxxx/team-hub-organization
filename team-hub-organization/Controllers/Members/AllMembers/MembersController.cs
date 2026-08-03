@@ -1,5 +1,3 @@
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Controllers;
 using team_hub_organization.Dtos;
@@ -8,13 +6,9 @@ using team_hub_organization.Services.Members.AllMembers;
 
 namespace team_hub_organization.Controllers.Members.AllMembers;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class MembersController(
     IMemberService memberService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>List organization members.</summary>
     [HttpGet("{orgId:guid}/members")]
@@ -65,7 +59,7 @@ public sealed class MembersController(
         try
         {
             var member = await memberService.AddAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(Get), new { orgId, userId = member.UserId }, member);
+            return CreatedAtVersionedAction(nameof(Get), new { orgId, userId = member.UserId }, member);
         }
         catch (Exception ex)
         {

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY aspire/TeamHub.ServiceDefaults/TeamHub.ServiceDefaults.csproj aspire/TeamHub.ServiceDefaults/
@@ -13,25 +13,25 @@ COPY building-blocks/TeamHub.Observability/ building-blocks/TeamHub.Observabilit
 COPY building-blocks/TeamHub.BlobStorage/ building-blocks/TeamHub.BlobStorage/
 COPY building-blocks/TeamHub.GrpcContracts/ building-blocks/TeamHub.GrpcContracts/
 COPY services/team-hub-organization/team-hub-organization/ services/team-hub-organization/team-hub-organization/
-RUN dotnet publish services/team-hub-organization/team-hub-organization/team-hub-organization.csproj -c Release -o /app/publish
+RUN dotnet publish services/team-hub-organization/team-hub-organization/team-hub-organization.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY --from=build /app/publish .
-RUN chown -R app:app /app
+COPY --from=build --chown=app:app /app/publish .
 
 USER app
 
+# Cleared so Kestrel endpoints from appsettings (8080 REST + 8081 gRPC) are used.
 ENV ASPNETCORE_URLS=
 EXPOSE 8080
 EXPOSE 8081
 
-HEALTHCHECK --interval=120s --timeout=5s --start-period=15s --retries=5 \
+HEALTHCHECK --interval=120s --timeout=5s --start-period=45s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["dotnet", "team-hub-organization.dll"]

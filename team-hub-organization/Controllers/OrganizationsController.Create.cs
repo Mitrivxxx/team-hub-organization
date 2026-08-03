@@ -19,7 +19,7 @@ public partial class OrganizationsController
         try
         {
             var organization = await organizationService.CreateAsync(request, userId, cancellationToken);
-            return CreatedAtAction(nameof(GetById), new { orgId = organization.Id }, organization);
+            return CreatedAtVersionedAction(nameof(GetById), new { orgId = organization.Id }, organization);
         }
         catch (OrganizationConflictException ex)
         {

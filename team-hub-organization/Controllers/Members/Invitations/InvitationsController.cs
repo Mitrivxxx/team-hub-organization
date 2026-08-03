@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Controllers;
 using team_hub_organization.Dtos;
@@ -10,13 +8,9 @@ using team_hub_organization.Services.Members.Invitations;
 
 namespace team_hub_organization.Controllers.Members.Invitations;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class InvitationsController(
     IInvitationService invitationService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>List organization invitations.</summary>
     [HttpGet("{orgId:guid}/invitations")]
@@ -49,7 +43,7 @@ public sealed class InvitationsController(
         try
         {
             var invitation = await invitationService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(Get), new { orgId, invitationId = invitation.Id }, invitation);
+            return CreatedAtVersionedAction(nameof(Get), new { orgId, invitationId = invitation.Id }, invitation);
         }
         catch (Exception ex)
         {

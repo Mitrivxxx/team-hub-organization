@@ -1,5 +1,3 @@
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Controllers;
 using team_hub_organization.Dtos;
@@ -9,13 +7,9 @@ using team_hub_organization.Services.Members.Roles;
 
 namespace team_hub_organization.Controllers.Members.Roles;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class RolesController(
     IRoleService roleService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>List organization roles.</summary>
     [HttpGet("{orgId:guid}/roles")]
@@ -68,7 +62,7 @@ public sealed class RolesController(
         try
         {
             var role = await roleService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(Get), new { orgId, roleId = role.Id }, role);
+            return CreatedAtVersionedAction(nameof(Get), new { orgId, roleId = role.Id }, role);
         }
         catch (Exception ex)
         {
@@ -196,7 +190,7 @@ public sealed class RolesController(
         try
         {
             var member = await roleService.AssignMemberAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(ListMembers), new { orgId, roleId }, member);
+            return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, roleId }, member);
         }
         catch (Exception ex)
         {

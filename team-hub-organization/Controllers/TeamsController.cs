@@ -1,5 +1,3 @@
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Dtos;
 using team_hub_organization.Services;
@@ -8,14 +6,10 @@ using team_hub_organization.Services.Teams;
 
 namespace team_hub_organization.Controllers;
 
-[ApiController]
-[ApiVersion("0.1")]
-[Route("api/organizations/v0.1.0")]
-[Authorize]
 public sealed class TeamsController(
     ITeamService teamService,
     ITeamAvatarService teamAvatarService,
-    ICurrentUserService currentUserService) : ControllerBase
+    ICurrentUserService currentUserService) : OrganizationApiController
 {
     /// <summary>List teams.</summary>
     [HttpGet("{orgId:guid}/teams")]
@@ -40,7 +34,7 @@ public sealed class TeamsController(
         try
         {
             var team = await teamService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(Get), new { orgId, teamId = team.Id }, team);
+            return CreatedAtVersionedAction(nameof(Get), new { orgId, teamId = team.Id }, team);
         }
         catch (Exception ex)
         {
@@ -177,7 +171,7 @@ public sealed class TeamsController(
         try
         {
             var member = await teamService.AddMemberAsync(orgId, teamId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtAction(nameof(ListMembers), new { orgId, teamId }, member);
+            return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, teamId }, member);
         }
         catch (Exception ex)
         {

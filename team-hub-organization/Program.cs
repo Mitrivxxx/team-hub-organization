@@ -1,11 +1,16 @@
 using DotNetEnv;
-using Microsoft.EntityFrameworkCore;
 using TeamHub.Observability;
-using team_hub_organization.Configuration;
-using team_hub_organization.Data;
-using team_hub_organization.Services.Rbac;
+using team_hub_organization.Configuration.Extensions;
+using team_hub_organization.Seeding;
 
-Env.TraversePath().Load();
+// Local/dev convenience only. Production gets config from appsettings + compose env_file / Aspire.
+if (!string.Equals(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        Environments.Production,
+        StringComparison.OrdinalIgnoreCase))
+{
+    Env.TraversePath().Load();
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,19 +21,23 @@ builder.Services.AddTeamHubOpenTelemetry(builder.Configuration, "team-hub-organi
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddOrganizationHealthChecks(builder.Configuration);
 builder.Services.AddJwtConfiguration(builder.Configuration);
+builder.Services.AddOrganizationBlobStorage(builder.Configuration);
+builder.Services.AddOrganizationGrpc(builder.Configuration);
+builder.Services.AddImportExportJobs();
 builder.Services.AddApiInfrastructure();
 builder.Services.AddValidation();
-builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddApplicationServices();
+builder.Services.AddDemoSeeding(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
-if (!app.Environment.IsEnvironment("Testing"))
+if (args.Contains("--seed"))
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<OrganizationDbContext>();
-    db.Database.Migrate();
-    await scope.ServiceProvider.GetRequiredService<IPermissionSeedService>().EnsureCatalogAsync();
+    await app.RunSeedAndExitAsync();
+    return;
 }
+
+await app.ApplyStartupSchemaAsync();
 
 app.UseApiPipeline();
 app.MapTeamHubObservabilityEndpoints();

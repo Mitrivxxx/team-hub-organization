@@ -16,8 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DOTNET_VERSION: "8.0.x"
-  # Monorepo holding building-blocks + ServiceDefaults (ProjectReference paths).
+  DOTNET_VERSION: "10.0.x"
   MONOREPO: Mitrivxxx/team-hub
   MONOREPO_REF: main
 

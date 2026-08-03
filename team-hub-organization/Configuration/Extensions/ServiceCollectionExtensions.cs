@@ -7,9 +7,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Auth;
@@ -25,7 +26,7 @@ using team_hub_organization.Services.Rbac;
 using team_hub_organization.Services.Statistics;
 using team_hub_organization.Services.Teams;
 
-namespace team_hub_organization.Configuration;
+namespace team_hub_organization.Configuration.Extensions;
 
 public static class ServiceCollectionExtensions
 {
@@ -80,11 +81,12 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddApiInfrastructure(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
         services.AddAuthorization();
         services.AddControllers();
         services.AddApiVersioning(options =>
             {
-                options.DefaultApiVersion = new ApiVersion(0, 1);
+                options.DefaultApiVersion = new ApiVersion(1, 0);
                 options.AssumeDefaultVersionWhenUnspecified = true;
                 options.ReportApiVersions = true;
                 options.ApiVersionReader = new UrlSegmentApiVersionReader();
@@ -92,8 +94,7 @@ public static class ServiceCollectionExtensions
             .AddMvc()
             .AddApiExplorer(options =>
             {
-                options.GroupNameFormat = "'v'VVV";
-                options.FormatGroupName = (_, _) => "v0.1.0";
+                options.GroupNameFormat = "'v'V";
                 options.SubstituteApiVersionInUrl = true;
             });
         services.AddEndpointsApiExplorer();
@@ -114,19 +115,9 @@ public static class ServiceCollectionExtensions
                 BearerFormat = "JWT"
             });
 
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
             {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
-                    },
-                    Array.Empty<string>()
-                }
+                [new OpenApiSecuritySchemeReference("Bearer", document)] = []
             });
         });
 
@@ -140,18 +131,35 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddOrganizationBlobStorage(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddHttpContextAccessor();
         services.AddTeamHubBlobStorage(configuration);
+        return services;
+    }
+
+    public static IServiceCollection AddOrganizationGrpc(this IServiceCollection services, IConfiguration configuration)
+    {
         services
             .AddOptions<GrpcOptions>()
-            .Bind(configuration.GetSection(GrpcOptions.SectionName));
+            .Bind(configuration.GetSection(GrpcOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddSingleton<IAuthUserResolveClient, AuthUserResolveClient>();
+        services.AddGrpc();
+        return services;
+    }
+
+    public static IServiceCollection AddImportExportJobs(this IServiceCollection services)
+    {
         services.AddSingleton<IImportExportJobQueue, ImportExportJobQueue>();
         services.AddHostedService<ImportExportBackgroundService>();
-        services.AddScoped<IImportExportJobProcessor, ImportExportJobProcessor>();
+        return services;
+    }
+
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
         services.AddScoped<IImportExportService, ImportExportService>();
+        services.AddScoped<IImportExportJobProcessor, ImportExportJobProcessor>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IOrganizationAuthorizationService, OrganizationAuthorizationService>();
         services.AddScoped<IPermissionSeedService, PermissionSeedService>();
@@ -167,7 +175,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IActivityRecorder, ActivityRecorder>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IOrganizationStatsService, OrganizationStatsService>();
-        services.AddGrpc();
         return services;
     }
 }

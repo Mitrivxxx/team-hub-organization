@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -28,9 +29,11 @@ public sealed class TestOrganizationWebApplicationFactory : WebApplicationFactor
         builder.UseSetting("Jwt:Key", TestJwtConfiguration.Key);
         builder.UseSetting("Jwt:Issuer", TestJwtConfiguration.Issuer);
         builder.UseSetting("Jwt:Audience", TestJwtConfiguration.Audience);
+        builder.UseSetting("Grpc:Auth", "http://127.0.0.1:9");
 
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<IDbContextOptionsConfiguration<OrganizationDbContext>>();
             services.RemoveAll<DbContextOptions<OrganizationDbContext>>();
             services.RemoveAll<OrganizationDbContext>();
 
@@ -85,7 +88,7 @@ public class OrganizationsIntegrationTests : IClassFixture<TestOrganizationWebAp
     public async Task Create_WithoutToken_ShouldReturnUnauthorized()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/organizations/v0.1.0", new CreateOrganizationRequest { Name = "Acme" });
+        var response = await client.PostAsJsonAsync("/api/organizations/v1", new CreateOrganizationRequest { Name = "Acme" });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -93,7 +96,7 @@ public class OrganizationsIntegrationTests : IClassFixture<TestOrganizationWebAp
     public async Task Create_WithToken_ShouldReturnCreated()
     {
         var client = _factory.CreateAuthenticatedClient(Guid.NewGuid());
-        var response = await client.PostAsJsonAsync("/api/organizations/v0.1.0", new CreateOrganizationRequest
+        var response = await client.PostAsJsonAsync("/api/organizations/v1", new CreateOrganizationRequest
         {
             Name = "Acme",
             Nip = "1234567890",

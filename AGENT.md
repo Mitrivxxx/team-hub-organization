@@ -2,7 +2,7 @@
 - Organization microservice for Team Hub (organizations, teams, memberships, roles/permissions, invitations).
 
 ## Source of truth
-- `team-hub-organization/` (`Program.cs`, `Configuration/`, `Controllers/`, `appsettings*.json`)
+- `team-hub-organization/` (`Program.cs`, `Configuration/{Options,Middleware,Extensions}/`, `Controllers/`, `Seeding/`, `appsettings*.json`)
 - `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
 - `team-hub-organization/Migrations/*` (schema)
 - `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`, `BlobStorage:*` dev)
@@ -23,7 +23,7 @@
 - Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Statistics`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
 
 ## Do
-- Endpoints (base `/api/organizations/v0.1.0`, JWT required):
+- Endpoints (base `/api/organizations/v1`, JWT required):
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
   - Organization: `POST /`, `GET /`, `GET /{orgId}`, `GET /by-slug/{slug}`, `PATCH /{orgId}`, `PUT|DELETE /{orgId}/avatar`, `DELETE /{orgId}`, `POST /{orgId}/transfer-ownership`, `POST /{orgId}/leave`
@@ -46,25 +46,40 @@
 - See `docs/organization.mb` for request bodies, status codes, authZ rules, and future domain event contracts.
 - RBAC: org-scoped permissions; org-scoped roles (`ORG` | `TEAM`); members assigned via `organization_member_roles` (many-to-many). Effective permissions = union of roles.
 - System roles on org create: Owner, Admin, Member (org) + TeamLead, Member (team). Owner gets all permissions; Admin all except `org.delete`.
-- API versioning: URL path `/api/organizations/v0.1.0/*` (SemVer `0.1.0`; Asp.Versioning major.minor `0.1`, packages `Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0).
+- API versioning: URL path `/api/organizations/v1/*` (contract `1.0`; major only in URL). Source of truth: `Configuration/OrganizationApiVersions.cs` + `Controllers/OrganizationApiController` base (`Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0). Swagger docs from `IApiVersionDescriptionProvider`. Additive changes stay on `v1`; breaking change adds `v2` beside deprecated `v1`.
 - Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
 - Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
-- Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); exclude `/health` and `/metrics` from Serilog request logging.
-- Keep `ExceptionMiddleware` as the first middleware (RFC 7807 `ProblemDetails`).
-- Keep `CorrelationIdMiddleware` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
-- Keep `UserIdLoggingMiddleware` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
+- Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); shared Exception/CorrelationId/UserIdLogging + `UseSerilogRequestLoggingExcludingHealth` from `TeamHub.Observability`.
+- Keep `UseTeamHubExceptionHandling` as the first middleware (RFC 7807 `ProblemDetails`).
+- Keep `UseTeamHubCorrelationId` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
+- Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.
+- Config layering:
+  - `appsettings.json` — shared defaults only (Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
+  - `appsettings.Development.json` / `appsettings.Staging.json` — localhost Kestrel (`5002`/`5102`), `Grpc:Auth` localhost, Seed on.
+  - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `team-hub-auth:8081`, Seed off, compact Serilog.
+  - `GrpcOptions.Auth` is `[Required]` + `ValidateOnStart` (no class-level localhost default; missing config fails at startup).
+- DotNetEnv: `Env.TraversePath().Load()` runs only when `ASPNETCORE_ENVIRONMENT` is not `Production` (before `CreateBuilder`). Production uses `appsettings.Production.json` + compose `env_file` / Aspire env vars — not DotNetEnv.
+- Startup helpers in `Configuration/Extensions/WebApplicationExtensions.cs`: `RunSeedAndExitAsync` (`--seed`), `ApplyStartupSchemaAsync` (migrate + permission catalog; skipped in Testing).
+- Config layout: `Configuration/Options/` (DTOs + Swagger options), `Configuration/Middleware/` (HTTP), `Configuration/Extensions/` (DI + pipeline wiring).
+- DI registration is capability-based (same style as auth `AddRedisSessionStore`): infra adapters (`AddDatabase`, `AddJwtConfiguration`, `AddOrganizationBlobStorage`, `AddOrganizationGrpc`, `AddImportExportJobs`, `AddApiInfrastructure`) vs application (`AddApplicationServices` — domain services + import/export processor).
 - Dev Env: HTTP only on port `5002` (`launchSettings.json`).
 - Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
-- Docker healthcheck interval: `120s` (`docker-compose.yml` + `Dockerfile`).
-- Keep this file updated after API, port, or observability changes.
-- Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup). System permission templates cloned per org on create (no global catalog table).
+- Docker healthcheck: interval `120s`, start-period `45s` (migrations + permission catalog on startup; `docker-compose.yml` + `Dockerfile`).
+- Docker build: `.env` excluded via root `.dockerignore`; publish uses `--no-restore`; runtime files owned via `COPY --chown=app:app`.
+- Source of truth: also `Seeding/` (demo seed) and `Configuration/Options/SeedOptions.cs`.
+- Demo seed (`--seed`): `Development` or `Staging` only when `Seed:Enabled=true`; migrates + seeds + exits (no Kestrel). Production blocked. Requires auth seeded and reachable at `Grpc:Auth` (resolve `OwnerUsername`).
+  - Development defaults: 1 org, 20 members (`demo00001`…), 2 teams; Staging: 3 orgs, 200 members, 5 teams (`appsettings.*.json`).
+  - Slugs `demo-org-{n}`; idempotent skip when slug exists. Owner = `JanWilk123` via auth gRPC.
+  - Layout: `Seeding/Development|Staging/*DataSeeder`, `Seeding/Internal/OrganizationDemoBuilder` (uses `OrganizationService` / `MemberService` / `TeamService`). RBAC system roles still seeded on org create (`OrganizationRoleSeeder`).
+- Keep this file updated after API, port, observability, or seed changes.
+- Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup via `ApplyStartupSchemaAsync`, all envs except Testing). System permission templates cloned per org on create (no global catalog table).
 - Connection string:
-  - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db`
-  - docker prod compose: `Database=organizationdb`
+  - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db` (via `.env` + DotNetEnv)
+  - docker prod compose: `Database=organizationdb` (via compose `env_file`; uncomment prod connection in `.env`, DotNetEnv not loaded)
 - Postgres container `postgres-dev` (dev) and `postgres-prod` (prod) create both auth and organization databases via init script `infrastructure/postgres/init/01-create-dbs-{dev|prod}.sql` mounted at `/docker-entrypoint-initdb.d/`.
-- Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers.
+- Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers (use prod connection string comments; compose injects via `env_file`, not DotNetEnv).
 - Dev avatar storage: Azurite via `docker-compose.dev.yml` or Aspire (`BlobStorage__ConnectionString`, `BlobStorage__PublicBlobEndpoint`); `avatarUrl` in API responses is a read-only SAS URL; DB stores internal blob path.
 - Avatar upload/delete returns `503` when blob storage is not configured (prod compose has no Azurite by design).
 

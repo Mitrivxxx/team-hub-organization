@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Options;
-using team_hub_organization.Configuration;
+using team_hub_organization.Configuration.Options;
 
 namespace team_hub_organization.Tests.Configuration;
 

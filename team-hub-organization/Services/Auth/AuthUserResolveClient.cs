@@ -1,7 +1,7 @@
 using Grpc.Net.Client;
 using Microsoft.Extensions.Options;
 using TeamHub.GrpcContracts.Auth.V1;
-using team_hub_organization.Configuration;
+using team_hub_organization.Configuration.Options;
 
 namespace team_hub_organization.Services.Auth;
 

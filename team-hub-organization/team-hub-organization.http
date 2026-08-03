@@ -8,7 +8,7 @@ Accept: application/json
 ###
 
 # Organizations
-POST {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0
+POST {{team_hub_organization_HostAddress}}/api/organizations/v1
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -18,25 +18,25 @@ Content-Type: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0
+GET {{team_hub_organization_HostAddress}}/api/organizations/v1
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/{{organizationId}}
+GET {{team_hub_organization_HostAddress}}/api/organizations/v1/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-GET {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/by-slug/acme-corp
+GET {{team_hub_organization_HostAddress}}/api/organizations/v1/by-slug/acme-corp
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-PATCH {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/{{organizationId}}
+PATCH {{team_hub_organization_HostAddress}}/api/organizations/v1/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 ###
 
-PUT {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/{{organizationId}}/avatar
+PUT {{team_hub_organization_HostAddress}}/api/organizations/v1/{{organizationId}}/avatar
 Authorization: Bearer {{accessToken}}
 Content-Type: multipart/form-data; boundary=----AvatarBoundary
 
@@ -59,12 +59,12 @@ Content-Type: image/png
 
 ###
 
-DELETE {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/{{organizationId}}/avatar
+DELETE {{team_hub_organization_HostAddress}}/api/organizations/v1/{{organizationId}}/avatar
 Authorization: Bearer {{accessToken}}
 
 ###
 
-DELETE {{team_hub_organization_HostAddress}}/api/organizations/v0.1.0/{{organizationId}}
+DELETE {{team_hub_organization_HostAddress}}/api/organizations/v1/{{organizationId}}
 Authorization: Bearer {{accessToken}}
 
 ###
