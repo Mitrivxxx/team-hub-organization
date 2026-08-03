@@ -34,6 +34,9 @@ public static class ActivityTypes
     public const string OwnershipTransferred = "OwnershipTransferred";
     public const string OrganizationDeleted = "OrganizationDeleted";
 
+    public const string ImportCompleted = "ImportCompleted";
+    public const string ExportCompleted = "ExportCompleted";
+
     public static readonly IReadOnlyList<string> All =
     [
         MemberJoined, MemberLeft, MemberRolesChanged,
@@ -41,7 +44,8 @@ public static class ActivityTypes
         RoleCreated, RoleUpdated, RoleDeleted, RolePermissionsChanged, RoleMemberAssigned, RoleMemberRevoked,
         PermissionCreated, PermissionUpdated, PermissionDeleted,
         TeamCreated, TeamUpdated, TeamDeleted, TeamMemberAdded, TeamMemberUpdated, TeamMemberRemoved,
-        OrganizationUpdated, OwnershipTransferred, OrganizationDeleted
+        OrganizationUpdated, OwnershipTransferred, OrganizationDeleted,
+        ImportCompleted, ExportCompleted
     ];
 }
 
@@ -53,4 +57,5 @@ public static class ActivityEntityTypes
     public const string Permission = "Permission";
     public const string Member = "Member";
     public const string Organization = "Organization";
+    public const string ImportExport = "ImportExport";
 }

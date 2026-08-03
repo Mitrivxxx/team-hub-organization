@@ -13,6 +13,7 @@ using team_hub_organization.Controllers.Members.AllMembers;
 using team_hub_organization.Controllers.Members.Invitations;
 using team_hub_organization.Controllers.Members.Permissions;
 using team_hub_organization.Controllers.Members.Roles;
+using team_hub_organization.Controllers.Statistics;
 using team_hub_organization.Data;
 using team_hub_organization.Models;
 using team_hub_organization.Services;
@@ -24,6 +25,7 @@ using team_hub_organization.Services.Members.Permissions;
 using team_hub_organization.Services.Members.Roles;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
+using team_hub_organization.Services.Statistics;
 using team_hub_organization.Services.Teams;
 
 namespace team_hub_organization.Tests.Controllers;
@@ -74,6 +76,9 @@ internal static class OrganizationsControllerTestHelpers
 
     public static ActivityController CreateActivityController(OrganizationDbContext db, Guid userId) =>
         new(new ActivityService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
+
+    public static StatisticsController CreateStatisticsController(OrganizationDbContext db, Guid userId) =>
+        new(new OrganizationStatsService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
 
     public static RolesController CreateRolesController(OrganizationDbContext db, Guid userId) =>
         new(new RoleService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));

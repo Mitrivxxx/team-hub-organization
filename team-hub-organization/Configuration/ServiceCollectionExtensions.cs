@@ -12,14 +12,17 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
+using team_hub_organization.Services.Auth;
 using team_hub_organization.Services.Me;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.ImportExport;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
 using team_hub_organization.Services.Members.Roles;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
+using team_hub_organization.Services.Statistics;
 using team_hub_organization.Services.Teams;
 
 namespace team_hub_organization.Configuration;
@@ -141,6 +144,14 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddTeamHubBlobStorage(configuration);
+        services
+            .AddOptions<GrpcOptions>()
+            .Bind(configuration.GetSection(GrpcOptions.SectionName));
+        services.AddSingleton<IAuthUserResolveClient, AuthUserResolveClient>();
+        services.AddSingleton<IImportExportJobQueue, ImportExportJobQueue>();
+        services.AddHostedService<ImportExportBackgroundService>();
+        services.AddScoped<IImportExportJobProcessor, ImportExportJobProcessor>();
+        services.AddScoped<IImportExportService, ImportExportService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IOrganizationAuthorizationService, OrganizationAuthorizationService>();
         services.AddScoped<IPermissionSeedService, PermissionSeedService>();
@@ -155,6 +166,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMeService, MeService>();
         services.AddScoped<IActivityRecorder, ActivityRecorder>();
         services.AddScoped<IActivityService, ActivityService>();
+        services.AddScoped<IOrganizationStatsService, OrganizationStatsService>();
         services.AddGrpc();
         return services;
     }

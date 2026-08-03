@@ -16,6 +16,7 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<InvitationOrgRole> InvitationOrgRoles => Set<InvitationOrgRole>();
     public DbSet<OrganizationActivity> OrganizationActivities => Set<OrganizationActivity>();
+    public DbSet<ImportExportJob> ImportExportJobs => Set<ImportExportJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -141,6 +142,27 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.Property(a => a.EntityType).HasMaxLength(64);
             e.Property(a => a.Details).HasColumnType("jsonb");
             e.HasOne(a => a.Organization).WithMany().HasForeignKey(a => a.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ImportExportJob>(e =>
+        {
+            e.ToTable("import_export_jobs");
+            e.HasIndex(j => new { j.OrganizationId, j.CreatedAt });
+            e.Property(j => j.Type)
+                .HasConversion(v => v.ToString().ToUpperInvariant(), v => Enum.Parse<ImportExportJobType>(v, true))
+                .HasMaxLength(20);
+            e.Property(j => j.Status)
+                .HasConversion(v => v.ToString().ToUpperInvariant(), v => Enum.Parse<ImportExportJobStatus>(v, true))
+                .HasMaxLength(32);
+            e.Property(j => j.Format)
+                .HasConversion(v => v.ToString().ToUpperInvariant(), v => Enum.Parse<ImportExportFormat>(v, true))
+                .HasMaxLength(10);
+            e.Property(j => j.SourceBlobPath).HasMaxLength(512);
+            e.Property(j => j.ResultBlobPath).HasMaxLength(512);
+            e.Property(j => j.ErrorBlobPath).HasMaxLength(512);
+            e.Property(j => j.OptionsJson).HasColumnType("jsonb");
+            e.Property(j => j.ErrorMessage).HasMaxLength(2000);
+            e.HasOne(j => j.Organization).WithMany().HasForeignKey(j => j.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

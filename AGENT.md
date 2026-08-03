@@ -18,9 +18,9 @@
   - `Roles` — org/team role CRUD + role↔permission attach + role members
   - `Permissions` — org-scoped permission CRUD (`/{orgId}/permissions`)
   - `Activity` — org activity feed (`GET /{orgId}/activity`) + `IActivityRecorder` writes from mutations
-  - `ImportExport` — placeholder (empty)
+  - `ImportExport` — CSV member import (preview + async job, partial success) + CSV/JSON export + job history
 - Models keep namespace `team_hub_organization.Models` (EF migrations stable); folders only.
-- Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Me`, `Services/Rbac`.
+- Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Statistics`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
 
 ## Do
 - Endpoints (base `/api/organizations/v0.1.0`, JWT required):
@@ -34,8 +34,10 @@
 - Internal gRPC (not via gateway): `OrganizationMemberService.ListMembers` + `ListActivity` on port `5102` (dev) / `8081` (docker).
 - Kestrel: REST/health on `8080` (Http1AndHttp2), gRPC on `8081` (Http2 only).
 - Shared contracts: `building-blocks/TeamHub.GrpcContracts` (`Protos/organization/v1/members.proto`).
-- User profiles (name/surname) stay in auth; BFF GraphQL composes them for All Members and Activity UI.
+- User profiles (name/surname) stay in auth; BFF GraphQL composes them for All Members and Activity UI. Organization resolves users for import via auth gRPC `ResolveUsers` (`Grpc__Auth`).
   - Activity: `GET /{orgId}/activity` (member-only; `type`, `q`, `from`, `to`, `page`, `pageSize`); append-only `organization_activities`
+  - Stats: `GET /{orgId}/stats` (member-only; `{ memberCount, teamCount }`; teams exclude soft-deleted)
+  - Import/Export: `POST /{orgId}/imports/preview`, `POST /{orgId}/imports` (`202`), `POST /{orgId}/exports` (`202`), `GET /{orgId}/import-export/jobs`, `GET /{orgId}/import-export/jobs/{jobId}`, `GET .../download?artifact=result|errors|source` — requires `org.members.manage`; async jobs + blob artifacts; CSV import matches existing auth users by email/username (partial success)
   - Teams: CRUD under `/{orgId}/teams`, avatar, team members CRUD
   - Roles: CRUD `/{orgId}/roles`, permission attach/replace/remove by `permissionId`, role members assign/list/revoke
   - Permissions: CRUD `/{orgId}/permissions` (org-scoped; system codes cloned on org create)
