@@ -11,13 +11,13 @@ public sealed class SeedOptions
     [Required]
     public string OwnerUsername { get; init; } = "JanWilk123";
 
-    [Range(0, 100)]
+    [Range(0, 10)]
     public int OrganizationCount { get; init; }
 
     [Range(0, 10_000)]
     public int MembersPerOrganization { get; init; }
 
-    [Range(0, 100)]
+    [Range(0, 20)]
     public int TeamsPerOrganization { get; init; }
 
     [Required]

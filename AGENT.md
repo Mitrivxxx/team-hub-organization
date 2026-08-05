@@ -5,7 +5,7 @@
 - `team-hub-organization/` (`Program.cs`, `Configuration/{Options,Middleware,Extensions}/`, `Controllers/`, `Seeding/`, `appsettings*.json`)
 - `team-hub-organization/Data/OrganizationDbContext.cs` (EF Core models + mappings)
 - `team-hub-organization/Migrations/*` (schema)
-- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:*`, `BlobStorage:*` dev)
+- `team-hub-organization/.env.example` (`ConnectionStrings:DefaultConnection`, `Jwt:Key`, `BlobStorage:*` dev)
 - `docs/organization.mb` (API contract)
 - `aspire/TeamHub.ServiceDefaults/Extensions.cs`
 - `building-blocks/TeamHub.Observability/`
@@ -48,7 +48,7 @@
 - System roles on org create: Owner, Admin, Member (org) + TeamLead, Member (team). Owner gets all permissions; Admin all except `org.delete`.
 - API versioning: URL path `/api/organizations/v1/*` (contract `1.0`; major only in URL). Source of truth: `Configuration/OrganizationApiVersions.cs` + `Controllers/OrganizationApiController` base (`Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0). Swagger docs from `IApiVersionDescriptionProvider`. Additive changes stay on `v1`; breaking change adds `v2` beside deprecated `v1`.
 - Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
-- Auth: JWT Bearer (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`); user id from claim `sub`. For manual `dotnet run`, `Jwt__*` in `.env` must match `team-hub-auth` (same values as `Aspire:Jwt` in AppHost dev config).
+- Auth: JWT Bearer; user id from claim `sub`. Public `Jwt:Issuer`/`Jwt:Audience` in `appsettings.json`; secret `Jwt__Key` from `.env` (must match auth / `Aspire:Jwt:Key`).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
 - Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); shared Exception/CorrelationId/UserIdLogging + `UseSerilogRequestLoggingExcludingHealth` from `TeamHub.Observability`.
 - Keep `UseTeamHubExceptionHandling` as the first middleware (RFC 7807 `ProblemDetails`).
@@ -56,7 +56,7 @@
 - Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.
 - Config layering:
-  - `appsettings.json` — shared defaults only (Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
+  - `appsettings.json` — shared defaults (Jwt Issuer/Audience, Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
   - `appsettings.Development.json` / `appsettings.Staging.json` — localhost Kestrel (`5002`/`5102`), `Grpc:Auth` localhost, Seed on.
   - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `team-hub-auth:8081`, Seed off, compact Serilog.
   - `GrpcOptions.Auth` is `[Required]` + `ValidateOnStart` (no class-level localhost default; missing config fails at startup).

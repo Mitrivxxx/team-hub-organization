@@ -11,9 +11,6 @@ namespace team_hub_organization.Configuration.Extensions;
 
 public static class WebApplicationExtensions
 {
-    /// <summary>
-    /// Migrates, ensures permission catalog, runs demo seed, then exits.
-    /// </summary>
     public static async Task RunSeedAndExitAsync(this WebApplication app)
     {
         if (!SeedServiceCollectionExtensions.CanRunDemoSeed(app.Environment, app.Configuration))
@@ -26,10 +23,6 @@ public static class WebApplicationExtensions
         await scope.ServiceProvider.GetRequiredService<IPermissionSeedService>().EnsureCatalogAsync();
         await scope.ServiceProvider.GetRequiredService<IEnvironmentDataSeeder>().SeedAsync();
     }
-
-    /// <summary>
-    /// Applies EF migrations and permission catalog on startup (skipped in Testing).
-    /// </summary>
     public static async Task ApplyStartupSchemaAsync(this WebApplication app)
     {
         if (app.Environment.IsEnvironment("Testing"))
