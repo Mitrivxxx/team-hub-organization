@@ -4,7 +4,7 @@ using team_hub_organization.Dtos;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Members.AllMembers;
 
-namespace team_hub_organization.Controllers.Members.AllMembers;
+namespace team_hub_organization.Controllers.Members;
 
 public sealed class MembersController(
     IMemberService memberService,
@@ -13,6 +13,9 @@ public sealed class MembersController(
     /// <summary>List organization members.</summary>
     [HttpGet("{orgId:guid}/members")]
     [ProducesResponseType(typeof(IReadOnlyList<MemberResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(
         Guid orgId,
         [FromQuery] Guid? roleId,
@@ -31,13 +34,16 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
 
     /// <summary>Get organization member.</summary>
     [HttpGet("{orgId:guid}/members/{userId:guid}")]
     [ProducesResponseType(typeof(MemberResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
         try
@@ -47,13 +53,18 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
 
     /// <summary>Add organization member.</summary>
     [HttpPost("{orgId:guid}/members")]
     [ProducesResponseType(typeof(MemberResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Add(Guid orgId, AddMemberRequest request, CancellationToken cancellationToken)
     {
         try
@@ -63,13 +74,18 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
 
     /// <summary>Update organization member role.</summary>
     [HttpPatch("{orgId:guid}/members/{userId:guid}")]
     [ProducesResponseType(typeof(MemberResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid orgId, Guid userId, UpdateMemberRequest request, CancellationToken cancellationToken)
     {
         try
@@ -79,13 +95,17 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
 
     /// <summary>Remove organization member.</summary>
     [HttpDelete("{orgId:guid}/members/{userId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Remove(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
         try
@@ -95,13 +115,16 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
 
     /// <summary>List member teams in organization.</summary>
     [HttpGet("{orgId:guid}/members/{userId:guid}/teams")]
     [ProducesResponseType(typeof(IReadOnlyList<TeamMembershipResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListTeams(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
         try
@@ -111,9 +134,7 @@ public sealed class MembersController(
         }
         catch (Exception ex)
         {
-            return MapException(ex);
+            return ControllerExceptionMapper.Map(ex);
         }
     }
-
-    IActionResult MapException(Exception ex) => ControllerExceptionMapper.Map(ex);
 }

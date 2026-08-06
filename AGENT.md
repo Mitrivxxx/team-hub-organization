@@ -12,15 +12,23 @@
 - `building-blocks/TeamHub.BlobStorage/` (dev avatar storage)
 
 ## Code layout (Members)
-- Controllers / Models / Services mirror manage UI tabs under `Members/`:
-  - `AllMembers` — org members CRUD + multi-role assignment + member teams
-  - `Invitations` — org invitations + token accept/reject + `/me/invitations`
-  - `Roles` — org/team role CRUD + role↔permission attach + role members
-  - `Permissions` — org-scoped permission CRUD (`/{orgId}/permissions`)
-  - `Activity` — org activity feed (`GET /{orgId}/activity`) + `IActivityRecorder` writes from mutations
-  - `ImportExport` — CSV member import (preview + async job, partial success) + CSV/JSON export + job history
+- Controllers live flat under `Controllers/Members/` (namespace `Controllers.Members`):
+  - `MembersController` — org members CRUD + multi-role assignment + member teams
+  - `InvitationsController` — org invitations + token accept/reject + `/me/invitations`
+  - `RolesController` — org/team role CRUD + role↔permission attach + role members
+  - `PermissionsController` — org-scoped permission CRUD (`/{orgId}/permissions`)
+  - `ActivityController` — org activity feed (`GET /{orgId}/activity`) + `IActivityRecorder` writes from mutations
+  - `ImportExportController` — CSV member import (preview + async job, partial success) + CSV/JSON export + job history
+- Models / Services still mirror manage UI tabs under `Members/` (`AllMembers`, `Invitations`, `Roles`, `Permissions`, `Activity`, `ImportExport`).
 - Models keep namespace `team_hub_organization.Models` (EF migrations stable); folders only.
-- Outside Members: `Controllers/Organizations*`, `Controllers/TeamsController`, `Controllers/Statistics`, `Controllers/Me`, `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
+- Controllers layout (feature folders + matching namespaces):
+  - `Controllers/Organizations/` — partial `OrganizationsController`
+  - `Controllers/Teams/` — `TeamsController`
+  - `Controllers/Me/`, `Controllers/Members/`, `Controllers/Statistics/`
+  - Root shared: `OrganizationApiController`, `ControllerExceptionMapper`
+- Services outside Members: `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
+- Controllers map domain exceptions via `Controllers/ControllerExceptionMapper` (404/403/409/400/503 ProblemDetails). Do not add per-controller exception mappers.
+- Swagger: every reachable error status on actions uses `[ProducesResponseType(typeof(ProblemDetails), StatusCodes.…)]` (success keeps DTO / 204 / 202). Document only statuses the action can return.
 
 ## Do
 - Endpoints (base `/api/organizations/v1`, JWT required):

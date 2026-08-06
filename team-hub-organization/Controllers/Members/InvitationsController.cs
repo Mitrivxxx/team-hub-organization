@@ -6,7 +6,7 @@ using team_hub_organization.Models;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Members.Invitations;
 
-namespace team_hub_organization.Controllers.Members.Invitations;
+namespace team_hub_organization.Controllers.Members;
 
 public sealed class InvitationsController(
     IInvitationService invitationService,
@@ -15,6 +15,10 @@ public sealed class InvitationsController(
     /// <summary>List organization invitations.</summary>
     [HttpGet("{orgId:guid}/invitations")]
     [ProducesResponseType(typeof(IReadOnlyList<InvitationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(Guid orgId, [FromQuery] string? status, CancellationToken cancellationToken)
     {
         try
@@ -38,6 +42,11 @@ public sealed class InvitationsController(
     /// <summary>Create invitation.</summary>
     [HttpPost("{orgId:guid}/invitations")]
     [ProducesResponseType(typeof(InvitationResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(Guid orgId, CreateInvitationRequest request, CancellationToken cancellationToken)
     {
         try
@@ -54,6 +63,9 @@ public sealed class InvitationsController(
     /// <summary>Get invitation.</summary>
     [HttpGet("{orgId:guid}/invitations/{invitationId:guid}")]
     [ProducesResponseType(typeof(InvitationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
         try
@@ -70,6 +82,10 @@ public sealed class InvitationsController(
     /// <summary>Cancel invitation.</summary>
     [HttpDelete("{orgId:guid}/invitations/{invitationId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Cancel(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
         try
@@ -86,6 +102,10 @@ public sealed class InvitationsController(
     /// <summary>Resend invitation.</summary>
     [HttpPost("{orgId:guid}/invitations/{invitationId:guid}/resend")]
     [ProducesResponseType(typeof(InvitationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Resend(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
         try
@@ -101,6 +121,8 @@ public sealed class InvitationsController(
     /// <summary>Preview invitation by token.</summary>
     [HttpGet("invitations/by-token/{token}")]
     [ProducesResponseType(typeof(InvitationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByToken(string token, CancellationToken cancellationToken)
     {
         try
@@ -117,6 +139,10 @@ public sealed class InvitationsController(
     /// <summary>Accept invitation by token.</summary>
     [HttpPost("invitations/by-token/{token}/accept")]
     [ProducesResponseType(typeof(MemberResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Accept(string token, CancellationToken cancellationToken)
     {
         try
@@ -132,6 +158,9 @@ public sealed class InvitationsController(
     /// <summary>Reject invitation by token.</summary>
     [HttpPost("invitations/by-token/{token}/reject")]
     [ProducesResponseType(typeof(InvitationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Reject(string token, CancellationToken cancellationToken)
     {
         try
@@ -147,6 +176,7 @@ public sealed class InvitationsController(
     /// <summary>List pending invitations for current user email claim.</summary>
     [HttpGet("me/invitations")]
     [ProducesResponseType(typeof(IReadOnlyList<InvitationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> ListMine(CancellationToken cancellationToken)
     {
         var email = User.FindFirstValue(ClaimTypes.Email)

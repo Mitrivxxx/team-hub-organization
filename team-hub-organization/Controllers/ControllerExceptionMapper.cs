@@ -26,12 +26,18 @@ internal static class ControllerExceptionMapper
             Title = "Conflict.",
             Detail = ex.Message
         }),
-        OrganizationValidationException => new BadRequestObjectResult(new ProblemDetails
+        OrganizationValidationException or OrganizationAvatarValidationException => new BadRequestObjectResult(new ProblemDetails
         {
             Status = StatusCodes.Status400BadRequest,
             Title = "Bad request.",
             Detail = ex.Message
         }),
+        OrganizationAvatarStorageUnavailableException => new ObjectResult(new ProblemDetails
+        {
+            Status = StatusCodes.Status503ServiceUnavailable,
+            Title = "Blob storage is not configured."
+        })
+        { StatusCode = StatusCodes.Status503ServiceUnavailable },
         _ => throw ex
     };
 }

@@ -13,6 +13,9 @@ public sealed class MeController(
     /// <summary>Get current membership in organization.</summary>
     [HttpGet("{orgId:guid}/me")]
     [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, CancellationToken cancellationToken)
     {
         try

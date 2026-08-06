@@ -16,8 +16,17 @@ public abstract class OrganizationApiController : ControllerBase
     {
         var values = new RouteValueDictionary(routeValues)
         {
-            ["version"] = OrganizationApiVersions.V1Major
+            ["version"] = OrganizationApiVersions.VersionMajor
         };
         return CreatedAtAction(actionName, values, value);
+    }
+
+    protected AcceptedAtActionResult AcceptedAtVersionedAction(string actionName, object routeValues, object? value)
+    {
+        var values = new RouteValueDictionary(routeValues)
+        {
+            ["version"] = OrganizationApiVersions.VersionMajor
+        };
+        return AcceptedAtAction(actionName, values, value);
     }
 }

@@ -13,6 +13,9 @@ public sealed class StatisticsController(
     /// <summary>Get organization member and team counts.</summary>
     [HttpGet("{orgId:guid}/stats")]
     [ProducesResponseType(typeof(OrganizationStatsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, CancellationToken cancellationToken)
     {
         try
