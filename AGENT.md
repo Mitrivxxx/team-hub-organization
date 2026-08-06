@@ -79,9 +79,11 @@
 - Docker build: `.env` excluded via root `.dockerignore`; publish uses `--no-restore`; runtime files owned via `COPY --chown=app:app`.
 - Source of truth: also `Seeding/` (demo seed) and `Configuration/Options/SeedOptions.cs`.
 - Demo seed (`--seed`): `Development` or `Staging` only when `Seed:Enabled=true`; migrates + seeds + exits (no Kestrel). Production blocked. Requires auth seeded and reachable at `Grpc:Auth` (resolve `OwnerUsername`).
-  - Development defaults: 1 org, 20 members (`demo00001`…), 2 teams; Staging: 3 orgs, 200 members, 5 teams (`appsettings.*.json`).
-  - Slugs `demo-org-{n}`; idempotent skip when slug exists. Owner = `JanWilk123` via auth gRPC.
-  - Layout: `Seeding/Development|Staging/*DataSeeder`, `Seeding/Internal/OrganizationDemoBuilder` (uses `OrganizationService` / `MemberService` / `TeamService`). RBAC system roles still seeded on org create (`OrganizationRoleSeeder`).
+  - Login after seed: auth user `JanWilk123` / `janwilk123` is Owner of seeded orgs.
+  - Development defaults: 1 org, 20 members (`demo00001`…), 2 Admins, 2 teams with members/job titles, 2 pending invitations; Staging: 3 orgs, 200 members, 5 Admins, 5 teams, 5 invitations (`appsettings.*.json`).
+  - Realistic company/team catalog in `Seeding/Internal/DemoOrganizationCatalog.cs` (PL company names, Engineering/Product/… teams). Slugs stay `demo-org-{n}` for stable idempotency.
+  - Idempotent skip when slug exists. To re-seed richer data after an older empty seed: delete demo orgs or wipe `organization_db`, then run `--seed` again.
+  - Layout: `Seeding/Development|Staging/*DataSeeder`, `Seeding/Internal/OrganizationDemoBuilder` (uses `OrganizationService` / `MemberService` / `TeamService` / `InvitationService`). RBAC system roles still seeded on org create (`OrganizationRoleSeeder`). Activity rows come from those services.
 - Keep this file updated after API, port, observability, or seed changes.
 - Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup via `ApplyStartupSchemaAsync`, all envs except Testing). System permission templates cloned per org on create (no global catalog table).
 - Connection string:

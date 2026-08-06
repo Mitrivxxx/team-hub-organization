@@ -6,6 +6,7 @@ using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Auth;
 using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Services.Teams;
@@ -17,6 +18,7 @@ public sealed class OrganizationDemoBuilder(
     IOrganizationService organizations,
     IMemberService members,
     ITeamService teams,
+    IInvitationService invitations,
     IAuthUserResolveClient authUsers,
     IOptions<SeedOptions> options,
     ILogger<OrganizationDemoBuilder> logger)
@@ -61,46 +63,78 @@ public sealed class OrganizationDemoBuilder(
             return;
         }
 
+        var company = DemoOrganizationCatalog.GetCompany(index);
         var nip = BuildNip(seed.NipBase, index);
         var org = await organizations.CreateAsync(
             new CreateOrganizationRequest
             {
-                Name = $"Demo Organization {index}",
+                Name = company.Name,
                 Slug = slug,
-                Description = "Seeded demo organization",
+                Description = company.Description,
                 Nip = nip,
-                Address = new OrganizationAddressDto
-                {
-                    Country = "Poland",
-                    City = "Warsaw",
-                    PostalCode = "00-001"
-                }
+                Address = company.Address
             },
             ownerUserId,
             cancellationToken);
 
         logger.LogInformation("Created demo organization '{Slug}' ({OrgId})", org.Slug, org.Id);
 
-        var memberRoleId = await db.Roles.AsNoTracking()
-            .Where(r => r.OrganizationId == org.Id
-                        && r.Scope == RoleScope.Org
-                        && r.Name == SystemRoleNames.Member)
-            .Select(r => r.Id)
-            .FirstAsync(cancellationToken);
+        var orgRoles = await db.Roles.AsNoTracking()
+            .Where(r => r.OrganizationId == org.Id && r.Scope == RoleScope.Org)
+            .ToDictionaryAsync(r => r.Name, r => r.Id, cancellationToken);
 
-        await AddDemoMembersAsync(org.Id, ownerUserId, memberRoleId, seed.MembersPerOrganization, cancellationToken);
-        await AddDemoTeamsAsync(org.Id, ownerUserId, seed.TeamsPerOrganization, cancellationToken);
+        var adminRoleId = orgRoles[SystemRoleNames.Admin];
+        var memberRoleId = orgRoles[SystemRoleNames.Member];
+
+        var memberUserIds = await AddDemoMembersAsync(
+            org.Id,
+            ownerUserId,
+            adminRoleId,
+            memberRoleId,
+            seed.MembersPerOrganization,
+            seed.AdminCountPerOrganization,
+            cancellationToken);
+
+        var createdTeams = await AddDemoTeamsAsync(
+            org.Id,
+            ownerUserId,
+            seed.TeamsPerOrganization,
+            cancellationToken);
+
+        var teamRoles = await db.Roles.AsNoTracking()
+            .Where(r => r.OrganizationId == org.Id && r.Scope == RoleScope.Team)
+            .ToDictionaryAsync(r => r.Name, r => r.Id, cancellationToken);
+
+        await PopulateTeamsAsync(
+            org.Id,
+            ownerUserId,
+            createdTeams,
+            memberUserIds,
+            teamRoles[SystemRoleNames.TeamLead],
+            teamRoles[SystemRoleNames.Member],
+            cancellationToken);
+
+        await AddPendingInvitationsAsync(
+            org.Id,
+            ownerUserId,
+            memberRoleId,
+            createdTeams.FirstOrDefault()?.Id,
+            teamRoles[SystemRoleNames.Member],
+            seed.PendingInvitationCount,
+            cancellationToken);
     }
 
-    async Task AddDemoMembersAsync(
+    async Task<IReadOnlyList<Guid>> AddDemoMembersAsync(
         Guid organizationId,
         Guid ownerUserId,
+        Guid adminRoleId,
         Guid memberRoleId,
         int memberCount,
+        int adminCount,
         CancellationToken cancellationToken)
     {
         if (memberCount <= 0)
-            return;
+            return [];
 
         var usernames = Enumerable.Range(1, memberCount)
             .Select(n => $"demo{n:D5}")
@@ -112,14 +146,17 @@ public sealed class OrganizationDemoBuilder(
             logger.LogWarning(
                 "No demo users resolved for organization {OrgId}; seed auth first (demo00001…)",
                 organizationId);
-            return;
+            return [];
         }
 
-        var added = 0;
-        foreach (var user in resolved)
+        var candidates = resolved.Where(u => u.Id != ownerUserId).ToList();
+        var addedUserIds = new List<Guid>(candidates.Count);
+        var adminsAdded = 0;
+        var membersAdded = 0;
+
+        foreach (var user in candidates)
         {
-            if (user.Id == ownerUserId)
-                continue;
+            var roleId = adminsAdded < adminCount ? adminRoleId : memberRoleId;
 
             try
             {
@@ -128,11 +165,15 @@ public sealed class OrganizationDemoBuilder(
                     new AddMemberRequest
                     {
                         UserId = user.Id,
-                        RoleIds = [memberRoleId]
+                        RoleIds = [roleId]
                     },
                     ownerUserId,
                     cancellationToken);
-                added++;
+                addedUserIds.Add(user.Id);
+                if (roleId == adminRoleId)
+                    adminsAdded++;
+                else
+                    membersAdded++;
             }
             catch (OrganizationConflictException)
             {
@@ -141,37 +182,205 @@ public sealed class OrganizationDemoBuilder(
         }
 
         logger.LogInformation(
-            "Added {Added}/{Requested} demo members to organization {OrgId}",
-            added,
+            "Added {Added}/{Requested} demo members to organization {OrgId} ({Admins} Admin, {Members} Member)",
+            addedUserIds.Count,
             memberCount,
-            organizationId);
+            organizationId,
+            adminsAdded,
+            membersAdded);
+
+        return addedUserIds;
     }
 
-    async Task AddDemoTeamsAsync(
+    async Task<IReadOnlyList<TeamResponse>> AddDemoTeamsAsync(
         Guid organizationId,
         Guid ownerUserId,
         int teamCount,
         CancellationToken cancellationToken)
     {
         if (teamCount <= 0)
-            return;
+            return [];
 
+        var created = new List<TeamResponse>(teamCount);
         for (var t = 1; t <= teamCount; t++)
         {
-            await teams.CreateAsync(
+            var profile = DemoOrganizationCatalog.GetTeam(t);
+            var team = await teams.CreateAsync(
                 organizationId,
                 new CreateTeamRequest
                 {
-                    Name = $"Demo Team {t}",
-                    Description = "Seeded demo team"
+                    Name = profile.Name,
+                    Description = profile.Description
                 },
                 ownerUserId,
                 cancellationToken);
+            created.Add(team);
         }
 
         logger.LogInformation(
             "Created {TeamCount} demo team(s) in organization {OrgId}",
-            teamCount,
+            created.Count,
+            organizationId);
+
+        return created;
+    }
+
+    async Task PopulateTeamsAsync(
+        Guid organizationId,
+        Guid ownerUserId,
+        IReadOnlyList<TeamResponse> createdTeams,
+        IReadOnlyList<Guid> memberUserIds,
+        Guid teamLeadRoleId,
+        Guid teamMemberRoleId,
+        CancellationToken cancellationToken)
+    {
+        if (createdTeams.Count == 0)
+            return;
+
+        var pool = memberUserIds.ToList();
+        var assigned = 0;
+
+        for (var i = 0; i < createdTeams.Count; i++)
+        {
+            var team = createdTeams[i];
+            Guid leadUserId;
+            string leadTitle;
+
+            if (i == 0)
+            {
+                leadUserId = ownerUserId;
+                leadTitle = "Engineering Manager";
+            }
+            else if (pool.Count > 0)
+            {
+                leadUserId = pool[0];
+                pool.RemoveAt(0);
+                leadTitle = "Team Lead";
+            }
+            else
+            {
+                leadUserId = ownerUserId;
+                leadTitle = "Team Lead";
+            }
+
+            await TryAddTeamMemberAsync(
+                organizationId,
+                team.Id,
+                leadUserId,
+                teamLeadRoleId,
+                leadTitle,
+                ownerUserId,
+                cancellationToken);
+            assigned++;
+        }
+
+        // Round-robin remaining members across teams as Team Member.
+        var teamIndex = 0;
+        var jobOrdinal = 0;
+        foreach (var userId in pool)
+        {
+            var team = createdTeams[teamIndex % createdTeams.Count];
+            await TryAddTeamMemberAsync(
+                organizationId,
+                team.Id,
+                userId,
+                teamMemberRoleId,
+                DemoOrganizationCatalog.GetJobTitle(jobOrdinal++),
+                ownerUserId,
+                cancellationToken);
+            assigned++;
+            teamIndex++;
+        }
+
+        logger.LogInformation(
+            "Assigned {Assigned} team membership(s) across {TeamCount} team(s) in organization {OrgId}",
+            assigned,
+            createdTeams.Count,
+            organizationId);
+    }
+
+    async Task TryAddTeamMemberAsync(
+        Guid organizationId,
+        Guid teamId,
+        Guid userId,
+        Guid roleId,
+        string? jobTitle,
+        Guid actorUserId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await teams.AddMemberAsync(
+                organizationId,
+                teamId,
+                new AddTeamMemberRequest
+                {
+                    UserId = userId,
+                    RoleId = roleId,
+                    JobTitle = jobTitle
+                },
+                actorUserId,
+                cancellationToken);
+        }
+        catch (OrganizationConflictException)
+        {
+            // already on team
+        }
+        catch (OrganizationValidationException ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Skipped team member {UserId} for team {TeamId} in organization {OrgId}",
+                userId,
+                teamId,
+                organizationId);
+        }
+    }
+
+    async Task AddPendingInvitationsAsync(
+        Guid organizationId,
+        Guid ownerUserId,
+        Guid memberRoleId,
+        Guid? firstTeamId,
+        Guid teamMemberRoleId,
+        int invitationCount,
+        CancellationToken cancellationToken)
+    {
+        if (invitationCount <= 0)
+            return;
+
+        var created = 0;
+        for (var i = 0; i < invitationCount; i++)
+        {
+            var email = DemoOrganizationCatalog.GetInvitationEmail(i);
+            var request = new CreateInvitationRequest
+            {
+                Email = email,
+                OrgRoleIds = [memberRoleId]
+            };
+
+            // First invitation optionally targets the first team.
+            if (i == 0 && firstTeamId is Guid teamId)
+            {
+                request.TeamId = teamId;
+                request.TeamRoleId = teamMemberRoleId;
+            }
+
+            try
+            {
+                await invitations.CreateAsync(organizationId, request, ownerUserId, cancellationToken);
+                created++;
+            }
+            catch (OrganizationConflictException)
+            {
+                // pending invite already exists
+            }
+        }
+
+        logger.LogInformation(
+            "Created {Created}/{Requested} pending invitation(s) for organization {OrgId}",
+            created,
+            invitationCount,
             organizationId);
     }
 

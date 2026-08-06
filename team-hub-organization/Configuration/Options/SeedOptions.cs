@@ -20,6 +20,12 @@ public sealed class SeedOptions
     [Range(0, 20)]
     public int TeamsPerOrganization { get; init; }
 
+    [Range(0, 100)]
+    public int AdminCountPerOrganization { get; init; } = 2;
+
+    [Range(0, 20)]
+    public int PendingInvitationCount { get; init; } = 2;
+
     [Required]
     public string SlugPrefix { get; init; } = "demo-org";
 
