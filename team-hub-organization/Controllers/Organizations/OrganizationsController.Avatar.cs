@@ -8,6 +8,7 @@ public partial class OrganizationsController
 {
     /// <summary>Upload organization avatar.</summary>
     [HttpPut("{orgId:guid}/avatar")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(OrganizationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -15,7 +16,7 @@ public partial class OrganizationsController
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     [RequestSizeLimit(2 * 1024 * 1024)]
-    public async Task<IActionResult> UploadAvatar(Guid orgId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadAvatar(Guid orgId, [FromForm] IFormFile file, CancellationToken cancellationToken)
     {
         var userId = currentUserService.GetRequiredUserId();
 

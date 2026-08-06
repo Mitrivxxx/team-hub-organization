@@ -2,6 +2,7 @@ using Asp.Versioning.ApiExplorer;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using team_hub_organization.Configuration.Swagger;
 
 namespace team_hub_organization.Configuration.Options;
 
@@ -16,7 +17,9 @@ public sealed class ConfigureSwaggerOptions(IApiVersionDescriptionProvider provi
             {
                 Title = "Team Hub Organization API",
                 Version = description.ApiVersion.ToString(),
-                Description = description.IsDeprecated ? "This API version has been deprecated." : null
+                Description = description.IsDeprecated
+                    ? "This API version has been deprecated."
+                    : DemoSeedSwaggerExamples.DevWorkflowMarkdown
             });
         }
     }

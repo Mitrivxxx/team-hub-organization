@@ -24,9 +24,9 @@
 - Controllers layout (feature folders + matching namespaces):
   - `Controllers/Organizations/` — partial `OrganizationsController`
   - `Controllers/Teams/` — `TeamsController`
-  - `Controllers/Me/`, `Controllers/Members/`, `Controllers/Statistics/`
+  - `Controllers/Me/`, `Controllers/Members/`, `Controllers/Statistics/`, `Controllers/Demo/`
   - Root shared: `OrganizationApiController`
-- Services outside Members: `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
+- Services outside Members: `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`, `Services/Demo` (`IDemoSeedContextService`).
 - Domain exceptions map via `Configuration/OrganizationExceptionMapper` + `UseTeamHubExceptionHandling` (RFC 9457 ProblemDetails). Controllers throw; do not add per-controller catch/mappers.
 - Swagger: every reachable error status on actions uses `[ProducesResponseType(typeof(ProblemDetails), StatusCodes.…)]` (success keeps DTO / 204 / 202). Document only statuses the action can return.
 - Register `AddTeamHubProblemDetails()` + `AddTeamHubExceptionMapper<OrganizationExceptionMapper>()`.
@@ -52,6 +52,7 @@
   - Permissions: CRUD `/{orgId}/permissions` (org-scoped; system codes cloned on org create)
   - Invitations: org-scoped list/create/get/cancel/resend (`orgRoleIds[]`); `invitations/by-token/{token}` get/accept/reject
   - Me: `GET /{orgId}/me` (roles union + permissions), `GET /me/invitations`
+  - Demo (Development/Staging only): `GET /demo/context?index=1` — seeded ids for Swagger try-out
 - See `docs/organization.mb` for request bodies, status codes, authZ rules, and future domain event contracts.
 - RBAC: org-scoped permissions; org-scoped roles (`ORG` | `TEAM`); members assigned via `organization_member_roles` (many-to-many). Effective permissions = union of roles.
 - System roles on org create: Owner, Admin, Member (org) + TeamLead, Member (team). Owner gets all permissions; Admin all except `org.delete`.
@@ -64,6 +65,7 @@
 - Keep `UseTeamHubCorrelationId` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
 - Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.
+- Swagger Try it out (demo seed): request DTO examples from `Configuration/Swagger/DemoSeedSwaggerExamples` via `DemoSeedRequestExampleSchemaFilter` (realistic bodies from seed catalog). Guid placeholder workflow lives only in the OpenAPI document description (not per-schema). Path params documented by `DemoSeedParameterOperationFilter`. Login: `JanWilk123` / `janwilk123`. **`GET /api/organizations/v1/demo/context?index=1`** (Dev/Staging only) returns seeded org/role/team/permission/invitation ids plus `addMemberUserId` (`demo00021` via auth gRPC) for copy-paste into Try it out. Create-org example uses catalog company #2 (`baltic-cloud-demo`) so it does not collide with seeded `demo-org-1`. Transfer ownership has no auto example (destructive). Avatar/import uploads use `[Consumes("multipart/form-data")]` + `[FromForm]`.
 - Config layering:
   - `appsettings.json` — shared defaults (Jwt Issuer/Audience, Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
   - `appsettings.Development.json` / `appsettings.Staging.json` — localhost Kestrel (`5002`/`5102`), `Grpc:Auth` localhost, Seed on.

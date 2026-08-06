@@ -77,6 +77,7 @@ public sealed class TeamsController(
 
     /// <summary>Upload team avatar.</summary>
     [HttpPut("{orgId:guid}/teams/{teamId:guid}/avatar")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(TeamResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -84,7 +85,7 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     [RequestSizeLimit(2 * 1024 * 1024)]
-    public async Task<IActionResult> UploadAvatar(Guid orgId, Guid teamId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadAvatar(Guid orgId, Guid teamId, [FromForm] IFormFile file, CancellationToken cancellationToken)
     {
         var team = await teamAvatarService.UploadAsync(orgId, teamId, file, currentUserService.GetRequiredUserId(), cancellationToken);
         return team is null ? NotFound() : Ok(team);

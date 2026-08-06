@@ -12,13 +12,14 @@ public sealed class ImportExportController(
 {
     /// <summary>Preview member CSV import without writing.</summary>
     [HttpPost("{orgId:guid}/imports/preview")]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [ProducesResponseType(typeof(ImportPreviewResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PreviewImport(Guid orgId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> PreviewImport(Guid orgId, [FromForm] IFormFile file, CancellationToken cancellationToken)
     {
         var preview = await importExportService.PreviewImportAsync(
             orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);
@@ -28,6 +29,7 @@ public sealed class ImportExportController(
 
     /// <summary>Start async member CSV import.</summary>
     [HttpPost("{orgId:guid}/imports")]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [ProducesResponseType(typeof(ImportExportJobAcceptedResponse), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -35,7 +37,7 @@ public sealed class ImportExportController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
-    public async Task<IActionResult> StartImport(Guid orgId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> StartImport(Guid orgId, [FromForm] IFormFile file, CancellationToken cancellationToken)
     {
         var result = await importExportService.StartImportAsync(
             orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);

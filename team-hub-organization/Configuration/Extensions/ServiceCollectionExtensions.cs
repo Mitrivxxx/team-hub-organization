@@ -12,9 +12,11 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
 using TeamHub.Observability;
 using team_hub_organization.Configuration.Options;
+using team_hub_organization.Configuration.Swagger;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Auth;
+using team_hub_organization.Services.Demo;
 using team_hub_organization.Services.Me;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
@@ -108,9 +110,12 @@ public static class ServiceCollectionExtensions
             if (File.Exists(xmlPath))
                 options.IncludeXmlComments(xmlPath);
 
+            options.SchemaFilter<DemoSeedRequestExampleSchemaFilter>();
+            options.OperationFilter<DemoSeedParameterOperationFilter>();
+
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
-                Description = "JWT Authorization header using the Bearer scheme.",
+                Description = "JWT Authorization header using the Bearer scheme. After demo seed login as JanWilk123 / janwilk123.",
                 Name = "Authorization",
                 In = ParameterLocation.Header,
                 Type = SecuritySchemeType.Http,
@@ -175,6 +180,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITeamAvatarService, TeamAvatarService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IMeService, MeService>();
+        services.AddScoped<IDemoSeedContextService, DemoSeedContextService>();
         services.AddScoped<IActivityRecorder, ActivityRecorder>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IOrganizationStatsService, OrganizationStatsService>();

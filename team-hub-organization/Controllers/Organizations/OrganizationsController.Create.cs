@@ -9,6 +9,7 @@ public partial class OrganizationsController
     /// <summary>Create organization and add creator as Owner member.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(OrganizationResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CreateOrganizationRequest request, CancellationToken cancellationToken)
