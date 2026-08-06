@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -55,19 +56,18 @@ public class OrganizationsControllerCreateTests
         await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, Guid.NewGuid(), slug: "acme");
         var controller = OrganizationsControllerTestHelpers.CreateController(db, userId);
 
-        var result = await controller.Create(new CreateOrganizationRequest
-        {
-            Name = "Acme",
-            Slug = "acme",
-            Nip = "1234567890",
-            Address = new OrganizationAddressDto
+        await Assert.ThrowsAsync<OrganizationConflictException>(() =>
+            controller.Create(new CreateOrganizationRequest
             {
-                Country = "Poland",
-                City = "Warsaw",
-                PostalCode = "00-001"
-            }
-        }, CancellationToken.None);
-
-        Assert.IsType<ConflictObjectResult>(result);
+                Name = "Acme",
+                Slug = "acme",
+                Nip = "1234567890",
+                Address = new OrganizationAddressDto
+                {
+                    Country = "Poland",
+                    City = "Warsaw",
+                    PostalCode = "00-001"
+                }
+            }, CancellationToken.None));
     }
 }

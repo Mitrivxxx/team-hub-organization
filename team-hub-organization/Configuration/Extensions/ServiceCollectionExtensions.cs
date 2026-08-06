@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
+using TeamHub.Observability;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Services;
@@ -84,6 +85,8 @@ public static class ServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddAuthorization();
         services.AddControllers();
+        services.AddTeamHubProblemDetails();
+        services.AddTeamHubExceptionMapper<OrganizationExceptionMapper>();
         services.AddApiVersioning(options =>
             {
                 options.DefaultApiVersion = new ApiVersion(1, 0);

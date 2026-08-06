@@ -22,20 +22,14 @@ public sealed class MembersController(
         [FromQuery] Guid? teamId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var members = await memberService.ListAsync(
-                orgId,
-                currentUserService.GetRequiredUserId(),
-                roleId,
-                teamId,
-                cancellationToken);
-            return Ok(members);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var members = await memberService.ListAsync(
+            orgId,
+            currentUserService.GetRequiredUserId(),
+            roleId,
+            teamId,
+            cancellationToken);
+        return Ok(members);
+
     }
 
     /// <summary>Get organization member.</summary>
@@ -46,15 +40,9 @@ public sealed class MembersController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await memberService.GetAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return member is null ? NotFound() : Ok(member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await memberService.GetAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return member is null ? NotFound() : Ok(member);
+
     }
 
     /// <summary>Add organization member.</summary>
@@ -67,15 +55,9 @@ public sealed class MembersController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Add(Guid orgId, AddMemberRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await memberService.AddAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(Get), new { orgId, userId = member.UserId }, member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await memberService.AddAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(Get), new { orgId, userId = member.UserId }, member);
+
     }
 
     /// <summary>Update organization member role.</summary>
@@ -88,15 +70,9 @@ public sealed class MembersController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid orgId, Guid userId, UpdateMemberRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await memberService.UpdateAsync(orgId, userId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return member is null ? NotFound() : Ok(member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await memberService.UpdateAsync(orgId, userId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return member is null ? NotFound() : Ok(member);
+
     }
 
     /// <summary>Remove organization member.</summary>
@@ -108,15 +84,9 @@ public sealed class MembersController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Remove(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var removed = await memberService.RemoveAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return removed ? NoContent() : NotFound();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var removed = await memberService.RemoveAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return removed ? NoContent() : NotFound();
+
     }
 
     /// <summary>List member teams in organization.</summary>
@@ -127,14 +97,8 @@ public sealed class MembersController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListTeams(Guid orgId, Guid userId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var teams = await memberService.ListTeamsAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return Ok(teams);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var teams = await memberService.ListTeamsAsync(orgId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return Ok(teams);
+
     }
 }

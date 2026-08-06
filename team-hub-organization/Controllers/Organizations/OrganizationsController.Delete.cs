@@ -15,14 +15,8 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            var deleted = await organizationService.SoftDeleteAsync(orgId, userId, cancellationToken);
-            return deleted ? NoContent() : NotFound();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var deleted = await organizationService.SoftDeleteAsync(orgId, userId, cancellationToken);
+        return deleted ? NoContent() : NotFound();
+
     }
 }

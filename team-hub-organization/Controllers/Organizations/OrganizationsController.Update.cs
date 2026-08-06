@@ -16,14 +16,8 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            var organization = await organizationService.UpdateAsync(orgId, request, userId, cancellationToken);
-            return organization is null ? NotFound() : Ok(organization);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var organization = await organizationService.UpdateAsync(orgId, request, userId, cancellationToken);
+        return organization is null ? NotFound() : Ok(organization);
+
     }
 }

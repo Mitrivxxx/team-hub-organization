@@ -18,15 +18,9 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            await organizationService.TransferOwnershipAsync(orgId, userId, request.NewOwnerUserId, cancellationToken);
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await organizationService.TransferOwnershipAsync(orgId, userId, request.NewOwnerUserId, cancellationToken);
+        return Ok();
+
     }
 
     /// <summary>Leave organization.</summary>
@@ -40,14 +34,8 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            await organizationService.LeaveAsync(orgId, userId, cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await organizationService.LeaveAsync(orgId, userId, cancellationToken);
+        return NoContent();
+
     }
 }

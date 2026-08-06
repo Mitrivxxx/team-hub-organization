@@ -19,15 +19,9 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            var organization = await organizationAvatarService.UploadAsync(orgId, file, userId, cancellationToken);
-            return organization is null ? NotFound() : Ok(organization);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var organization = await organizationAvatarService.UploadAsync(orgId, file, userId, cancellationToken);
+        return organization is null ? NotFound() : Ok(organization);
+
     }
 
     /// <summary>Delete organization avatar.</summary>
@@ -41,14 +35,8 @@ public partial class OrganizationsController
     {
         var userId = currentUserService.GetRequiredUserId();
 
-        try
-        {
-            var organization = await organizationAvatarService.DeleteAsync(orgId, userId, cancellationToken);
-            return organization is null ? NotFound() : Ok(organization);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var organization = await organizationAvatarService.DeleteAsync(orgId, userId, cancellationToken);
+        return organization is null ? NotFound() : Ok(organization);
+
     }
 }

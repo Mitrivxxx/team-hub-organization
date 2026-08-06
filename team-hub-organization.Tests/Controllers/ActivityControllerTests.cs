@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -55,19 +56,16 @@ public class ActivityControllerTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
         var activityController = OrganizationsControllerTestHelpers.CreateActivityController(db, strangerId);
-        var result = await activityController.List(
-            organization.Id,
-            type: null,
-            q: null,
-            from: null,
-            to: null,
-            page: 1,
-            pageSize: 20,
-            CancellationToken.None);
-
-        Assert.IsType<ObjectResult>(result);
-        var objectResult = (ObjectResult)result;
-        Assert.Equal(StatusCodes.Status403Forbidden, objectResult.StatusCode);
+        await Assert.ThrowsAsync<OrganizationAccessException>(() =>
+            activityController.List(
+                organization.Id,
+                type: null,
+                q: null,
+                from: null,
+                to: null,
+                page: 1,
+                pageSize: 20,
+                CancellationToken.None));
     }
 
     [Fact]

@@ -25,10 +25,11 @@
   - `Controllers/Organizations/` — partial `OrganizationsController`
   - `Controllers/Teams/` — `TeamsController`
   - `Controllers/Me/`, `Controllers/Members/`, `Controllers/Statistics/`
-  - Root shared: `OrganizationApiController`, `ControllerExceptionMapper`
+  - Root shared: `OrganizationApiController`
 - Services outside Members: `Services/Organizations`, `Services/Teams`, `Services/Statistics`, `Services/Me`, `Services/Rbac`.
-- Controllers map domain exceptions via `Controllers/ControllerExceptionMapper` (404/403/409/400/503 ProblemDetails). Do not add per-controller exception mappers.
+- Domain exceptions map via `Configuration/OrganizationExceptionMapper` + `UseTeamHubExceptionHandling` (RFC 9457 ProblemDetails). Controllers throw; do not add per-controller catch/mappers.
 - Swagger: every reachable error status on actions uses `[ProducesResponseType(typeof(ProblemDetails), StatusCodes.…)]` (success keeps DTO / 204 / 202). Document only statuses the action can return.
+- Register `AddTeamHubProblemDetails()` + `AddTeamHubExceptionMapper<OrganizationExceptionMapper>()`.
 
 ## Do
 - Endpoints (base `/api/organizations/v1`, JWT required):
@@ -59,7 +60,7 @@
 - Auth: JWT Bearer; user id from claim `sub`. Public `Jwt:Issuer`/`Jwt:Audience` in `appsettings.json`; secret `Jwt__Key` from `.env` (must match auth / `Aspire:Jwt:Key`).
 - Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
 - Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); shared Exception/CorrelationId/UserIdLogging + `UseSerilogRequestLoggingExcludingHealth` from `TeamHub.Observability`.
-- Keep `UseTeamHubExceptionHandling` as the first middleware (RFC 7807 `ProblemDetails`).
+- Keep `UseTeamHubExceptionHandling` as the first middleware (RFC 9457 `ProblemDetails`; see `docs/errors.mb`).
 - Keep `UseTeamHubCorrelationId` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
 - Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.

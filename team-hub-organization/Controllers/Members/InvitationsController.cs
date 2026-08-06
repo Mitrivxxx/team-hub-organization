@@ -5,6 +5,7 @@ using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Members.Invitations;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Controllers.Members;
 
@@ -21,22 +22,15 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(Guid orgId, [FromQuery] string? status, CancellationToken cancellationToken)
     {
-        try
+        InvitationStatus? parsed = null;
+        if (!string.IsNullOrWhiteSpace(status))
         {
-            InvitationStatus? parsed = null;
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                if (!Enum.TryParse<InvitationStatus>(status, ignoreCase: true, out var value))
-                    return BadRequest(new ProblemDetails { Title = "Invalid invitation status.", Status = 400 });
-                parsed = value;
-            }
+            if (!Enum.TryParse<InvitationStatus>(status, ignoreCase: true, out var value))
+                throw new OrganizationValidationException("Invalid invitation status.");
+            parsed = value;
+        }
 
-            return Ok(await invitationService.ListAsync(orgId, currentUserService.GetRequiredUserId(), parsed, cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await invitationService.ListAsync(orgId, currentUserService.GetRequiredUserId(), parsed, cancellationToken));
     }
 
     /// <summary>Create invitation.</summary>
@@ -49,15 +43,9 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(Guid orgId, CreateInvitationRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var invitation = await invitationService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(Get), new { orgId, invitationId = invitation.Id }, invitation);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var invitation = await invitationService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(Get), new { orgId, invitationId = invitation.Id }, invitation);
+
     }
 
     /// <summary>Get invitation.</summary>
@@ -68,15 +56,9 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var invitation = await invitationService.GetAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return invitation is null ? NotFound() : Ok(invitation);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var invitation = await invitationService.GetAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return invitation is null ? NotFound() : Ok(invitation);
+
     }
 
     /// <summary>Cancel invitation.</summary>
@@ -88,15 +70,9 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Cancel(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await invitationService.CancelAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await invitationService.CancelAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return NoContent();
+
     }
 
     /// <summary>Resend invitation.</summary>
@@ -108,14 +84,8 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Resend(Guid orgId, Guid invitationId, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Ok(await invitationService.ResendAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await invitationService.ResendAsync(orgId, invitationId, currentUserService.GetRequiredUserId(), cancellationToken));
+
     }
 
     /// <summary>Preview invitation by token.</summary>
@@ -125,15 +95,9 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByToken(string token, CancellationToken cancellationToken)
     {
-        try
-        {
-            var invitation = await invitationService.GetByTokenAsync(token, cancellationToken);
-            return invitation is null ? NotFound() : Ok(invitation);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var invitation = await invitationService.GetByTokenAsync(token, cancellationToken);
+        return invitation is null ? NotFound() : Ok(invitation);
+
     }
 
     /// <summary>Accept invitation by token.</summary>
@@ -145,14 +109,8 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Accept(string token, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Ok(await invitationService.AcceptAsync(token, currentUserService.GetRequiredUserId(), cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await invitationService.AcceptAsync(token, currentUserService.GetRequiredUserId(), cancellationToken));
+
     }
 
     /// <summary>Reject invitation by token.</summary>
@@ -163,14 +121,8 @@ public sealed class InvitationsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Reject(string token, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Ok(await invitationService.RejectAsync(token, currentUserService.GetRequiredUserId(), cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await invitationService.RejectAsync(token, currentUserService.GetRequiredUserId(), cancellationToken));
+
     }
 
     /// <summary>List pending invitations for current user email claim.</summary>

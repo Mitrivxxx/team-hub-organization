@@ -18,14 +18,8 @@ public sealed class MeController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var me = await meService.GetAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return me is null ? NotFound() : Ok(me);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var me = await meService.GetAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return me is null ? NotFound() : Ok(me);
+
     }
 }

@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Dtos;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -28,10 +28,8 @@ public class OrganizationsControllerGetTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, Guid.NewGuid());
         var controller = OrganizationsControllerTestHelpers.CreateController(db, Guid.NewGuid());
 
-        var result = await controller.GetById(organization.Id, CancellationToken.None);
-
-        var forbidden = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status403Forbidden, forbidden.StatusCode);
+        await Assert.ThrowsAsync<OrganizationAccessException>(() =>
+            controller.GetById(organization.Id, CancellationToken.None));
     }
 
     [Fact]

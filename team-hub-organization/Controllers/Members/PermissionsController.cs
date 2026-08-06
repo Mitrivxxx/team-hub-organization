@@ -18,15 +18,9 @@ public sealed class PermissionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(Guid orgId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permissions = await permissionService.ListAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return Ok(permissions);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permissions = await permissionService.ListAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return Ok(permissions);
+
     }
 
     /// <summary>Get organization permission.</summary>
@@ -37,15 +31,9 @@ public sealed class PermissionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid permissionId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permission = await permissionService.GetAsync(orgId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return permission is null ? NotFound() : Ok(permission);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permission = await permissionService.GetAsync(orgId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return permission is null ? NotFound() : Ok(permission);
+
     }
 
     /// <summary>Create organization permission.</summary>
@@ -58,15 +46,9 @@ public sealed class PermissionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(Guid orgId, CreatePermissionRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permission = await permissionService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(Get), new { orgId, permissionId = permission.Id }, permission);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permission = await permissionService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(Get), new { orgId, permissionId = permission.Id }, permission);
+
     }
 
     /// <summary>Update organization permission.</summary>
@@ -78,15 +60,9 @@ public sealed class PermissionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid orgId, Guid permissionId, UpdatePermissionRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permission = await permissionService.UpdateAsync(orgId, permissionId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return permission is null ? NotFound() : Ok(permission);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permission = await permissionService.UpdateAsync(orgId, permissionId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return permission is null ? NotFound() : Ok(permission);
+
     }
 
     /// <summary>Delete organization permission.</summary>
@@ -98,14 +74,8 @@ public sealed class PermissionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid orgId, Guid permissionId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await permissionService.DeleteAsync(orgId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await permissionService.DeleteAsync(orgId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return NoContent();
+
     }
 }

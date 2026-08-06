@@ -19,14 +19,8 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(Guid orgId, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Ok(await teamService.ListAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await teamService.ListAsync(orgId, currentUserService.GetRequiredUserId(), cancellationToken));
+
     }
 
     /// <summary>Create team.</summary>
@@ -37,15 +31,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Create(Guid orgId, CreateTeamRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var team = await teamService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(Get), new { orgId, teamId = team.Id }, team);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var team = await teamService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(Get), new { orgId, teamId = team.Id }, team);
+
     }
 
     /// <summary>Get team.</summary>
@@ -56,15 +44,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid teamId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var team = await teamService.GetAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return team is null ? NotFound() : Ok(team);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var team = await teamService.GetAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return team is null ? NotFound() : Ok(team);
+
     }
 
     /// <summary>Update team.</summary>
@@ -75,15 +57,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid orgId, Guid teamId, UpdateTeamRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var team = await teamService.UpdateAsync(orgId, teamId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return team is null ? NotFound() : Ok(team);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var team = await teamService.UpdateAsync(orgId, teamId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return team is null ? NotFound() : Ok(team);
+
     }
 
     /// <summary>Soft-delete team.</summary>
@@ -94,15 +70,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid orgId, Guid teamId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var deleted = await teamService.SoftDeleteAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return deleted ? NoContent() : NotFound();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var deleted = await teamService.SoftDeleteAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return deleted ? NoContent() : NotFound();
+
     }
 
     /// <summary>Upload team avatar.</summary>
@@ -116,15 +86,9 @@ public sealed class TeamsController(
     [RequestSizeLimit(2 * 1024 * 1024)]
     public async Task<IActionResult> UploadAvatar(Guid orgId, Guid teamId, IFormFile file, CancellationToken cancellationToken)
     {
-        try
-        {
-            var team = await teamAvatarService.UploadAsync(orgId, teamId, file, currentUserService.GetRequiredUserId(), cancellationToken);
-            return team is null ? NotFound() : Ok(team);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var team = await teamAvatarService.UploadAsync(orgId, teamId, file, currentUserService.GetRequiredUserId(), cancellationToken);
+        return team is null ? NotFound() : Ok(team);
+
     }
 
     /// <summary>Delete team avatar.</summary>
@@ -136,15 +100,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> DeleteAvatar(Guid orgId, Guid teamId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var team = await teamAvatarService.DeleteAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return team is null ? NotFound() : Ok(team);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var team = await teamAvatarService.DeleteAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return team is null ? NotFound() : Ok(team);
+
     }
 
     /// <summary>List team members.</summary>
@@ -155,14 +113,8 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListMembers(Guid orgId, Guid teamId, CancellationToken cancellationToken)
     {
-        try
-        {
-            return Ok(await teamService.ListMembersAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        return Ok(await teamService.ListMembersAsync(orgId, teamId, currentUserService.GetRequiredUserId(), cancellationToken));
+
     }
 
     /// <summary>Add team member.</summary>
@@ -175,15 +127,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddMember(Guid orgId, Guid teamId, AddTeamMemberRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await teamService.AddMemberAsync(orgId, teamId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, teamId }, member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await teamService.AddMemberAsync(orgId, teamId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, teamId }, member);
+
     }
 
     /// <summary>Update team member.</summary>
@@ -195,15 +141,9 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMember(Guid orgId, Guid teamId, Guid userId, UpdateTeamMemberRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await teamService.UpdateMemberAsync(orgId, teamId, userId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return member is null ? NotFound() : Ok(member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await teamService.UpdateMemberAsync(orgId, teamId, userId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return member is null ? NotFound() : Ok(member);
+
     }
 
     /// <summary>Remove team member.</summary>
@@ -214,14 +154,8 @@ public sealed class TeamsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMember(Guid orgId, Guid teamId, Guid userId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var removed = await teamService.RemoveMemberAsync(orgId, teamId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return removed ? NoContent() : NotFound();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var removed = await teamService.RemoveMemberAsync(orgId, teamId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return removed ? NoContent() : NotFound();
+
     }
 }

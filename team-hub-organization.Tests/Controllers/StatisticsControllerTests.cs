@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -55,9 +55,7 @@ public class StatisticsControllerTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
 
         var controller = OrganizationsControllerTestHelpers.CreateStatisticsController(db, strangerId);
-        var result = await controller.Get(organization.Id, CancellationToken.None);
-
-        var objectResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status403Forbidden, objectResult.StatusCode);
+        await Assert.ThrowsAsync<OrganizationAccessException>(() =>
+            controller.Get(organization.Id, CancellationToken.None));
     }
 }

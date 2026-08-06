@@ -4,6 +4,7 @@ using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services;
 using team_hub_organization.Services.Members.Roles;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Controllers.Members;
 
@@ -20,26 +21,19 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> List(Guid orgId, [FromQuery] string? scope, CancellationToken cancellationToken)
     {
-        try
+        RoleScope? parsed = null;
+        if (!string.IsNullOrWhiteSpace(scope))
         {
-            RoleScope? parsed = null;
-            if (!string.IsNullOrWhiteSpace(scope))
-            {
-                if (string.Equals(scope, "ORG", StringComparison.OrdinalIgnoreCase))
-                    parsed = RoleScope.Org;
-                else if (string.Equals(scope, "TEAM", StringComparison.OrdinalIgnoreCase))
-                    parsed = RoleScope.Team;
-                else
-                    return BadRequest(new ProblemDetails { Title = "Scope must be ORG or TEAM.", Status = 400 });
-            }
+            if (string.Equals(scope, "ORG", StringComparison.OrdinalIgnoreCase))
+                parsed = RoleScope.Org;
+            else if (string.Equals(scope, "TEAM", StringComparison.OrdinalIgnoreCase))
+                parsed = RoleScope.Team;
+            else
+                throw new OrganizationValidationException("Scope must be ORG or TEAM.");
+        }
 
-            var roles = await roleService.ListAsync(orgId, currentUserService.GetRequiredUserId(), parsed, cancellationToken);
-            return Ok(roles);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var roles = await roleService.ListAsync(orgId, currentUserService.GetRequiredUserId(), parsed, cancellationToken);
+        return Ok(roles);
     }
 
     /// <summary>Get organization role.</summary>
@@ -50,15 +44,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, Guid roleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var role = await roleService.GetAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return role is null ? NotFound() : Ok(role);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var role = await roleService.GetAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return role is null ? NotFound() : Ok(role);
+
     }
 
     /// <summary>Create organization role.</summary>
@@ -71,15 +59,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(Guid orgId, CreateRoleRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var role = await roleService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(Get), new { orgId, roleId = role.Id }, role);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var role = await roleService.CreateAsync(orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(Get), new { orgId, roleId = role.Id }, role);
+
     }
 
     /// <summary>Update organization role.</summary>
@@ -92,15 +74,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(Guid orgId, Guid roleId, UpdateRoleRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var role = await roleService.UpdateAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return role is null ? NotFound() : Ok(role);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var role = await roleService.UpdateAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return role is null ? NotFound() : Ok(role);
+
     }
 
     /// <summary>Delete organization role.</summary>
@@ -112,15 +88,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid orgId, Guid roleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await roleService.DeleteAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await roleService.DeleteAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return NoContent();
+
     }
 
     /// <summary>List role permissions.</summary>
@@ -131,15 +101,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListPermissions(Guid orgId, Guid roleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permissions = await roleService.ListPermissionsAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return Ok(permissions);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permissions = await roleService.ListPermissionsAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return Ok(permissions);
+
     }
 
     /// <summary>Replace role permissions.</summary>
@@ -151,15 +115,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReplacePermissions(Guid orgId, Guid roleId, AssignRolePermissionsRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permissions = await roleService.ReplacePermissionsAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return permissions is null ? NotFound() : Ok(permissions);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permissions = await roleService.ReplacePermissionsAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return permissions is null ? NotFound() : Ok(permissions);
+
     }
 
     /// <summary>Add role permissions.</summary>
@@ -171,15 +129,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddPermissions(Guid orgId, Guid roleId, AssignRolePermissionsRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var permissions = await roleService.AddPermissionsAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return permissions is null ? NotFound() : Ok(permissions);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var permissions = await roleService.AddPermissionsAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return permissions is null ? NotFound() : Ok(permissions);
+
     }
 
     /// <summary>Remove role permission.</summary>
@@ -191,15 +143,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemovePermission(Guid orgId, Guid roleId, Guid permissionId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await roleService.RemovePermissionAsync(orgId, roleId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await roleService.RemovePermissionAsync(orgId, roleId, permissionId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return NoContent();
+
     }
 
     /// <summary>List role members.</summary>
@@ -211,15 +157,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ListMembers(Guid orgId, Guid roleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var members = await roleService.ListMembersAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return Ok(members);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var members = await roleService.ListMembersAsync(orgId, roleId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return Ok(members);
+
     }
 
     /// <summary>Assign role to member.</summary>
@@ -232,15 +172,9 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignMember(Guid orgId, Guid roleId, AssignRoleMemberRequest request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var member = await roleService.AssignMemberAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, roleId }, member);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var member = await roleService.AssignMemberAsync(orgId, roleId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return CreatedAtVersionedAction(nameof(ListMembers), new { orgId, roleId }, member);
+
     }
 
     /// <summary>Revoke role from member.</summary>
@@ -253,14 +187,8 @@ public sealed class RolesController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RevokeMember(Guid orgId, Guid roleId, Guid userId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await roleService.RevokeMemberAsync(orgId, roleId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        await roleService.RevokeMemberAsync(orgId, roleId, userId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return NoContent();
+
     }
 }

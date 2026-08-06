@@ -18,17 +18,11 @@ public sealed class StatisticsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid orgId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await statsService.GetAsync(
-                orgId,
-                currentUserService.GetRequiredUserId(),
-                cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var result = await statsService.GetAsync(
+            orgId,
+            currentUserService.GetRequiredUserId(),
+            cancellationToken);
+        return Ok(result);
+
     }
 }

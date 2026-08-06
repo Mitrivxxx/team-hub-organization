@@ -16,14 +16,8 @@ public partial class OrganizationsController
         var userId = currentUserService.GetRequiredUserId();
         logger.LogInformation("Creating organization {OrganizationName} for user {UserId}", request.Name, userId);
 
-        try
-        {
-            var organization = await organizationService.CreateAsync(request, userId, cancellationToken);
-            return CreatedAtVersionedAction(nameof(GetById), new { orgId = organization.Id }, organization);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var organization = await organizationService.CreateAsync(request, userId, cancellationToken);
+        return CreatedAtVersionedAction(nameof(GetById), new { orgId = organization.Id }, organization);
+
     }
 }

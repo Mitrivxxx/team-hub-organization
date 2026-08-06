@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -34,9 +34,7 @@ public class OrganizationsControllerDeleteTests
         await db.SaveChangesAsync();
 
         var controller = OrganizationsControllerTestHelpers.CreateController(db, memberId);
-        var result = await controller.Delete(organization.Id, CancellationToken.None);
-
-        var forbidden = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status403Forbidden, forbidden.StatusCode);
+        await Assert.ThrowsAsync<OrganizationAccessException>(() =>
+            controller.Delete(organization.Id, CancellationToken.None));
     }
 }

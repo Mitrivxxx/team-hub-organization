@@ -26,23 +26,17 @@ public sealed class ActivityController(
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await activityService.ListAsync(
-                orgId,
-                currentUserService.GetRequiredUserId(),
-                type,
-                q,
-                from,
-                to,
-                page,
-                pageSize,
-                cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var result = await activityService.ListAsync(
+            orgId,
+            currentUserService.GetRequiredUserId(),
+            type,
+            q,
+            from,
+            to,
+            page,
+            pageSize,
+            cancellationToken);
+        return Ok(result);
+
     }
 }

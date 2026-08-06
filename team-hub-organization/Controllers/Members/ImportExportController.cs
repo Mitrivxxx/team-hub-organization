@@ -20,16 +20,10 @@ public sealed class ImportExportController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PreviewImport(Guid orgId, IFormFile file, CancellationToken cancellationToken)
     {
-        try
-        {
-            var preview = await importExportService.PreviewImportAsync(
-                orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);
-            return Ok(preview);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var preview = await importExportService.PreviewImportAsync(
+            orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);
+        return Ok(preview);
+
     }
 
     /// <summary>Start async member CSV import.</summary>
@@ -43,16 +37,10 @@ public sealed class ImportExportController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> StartImport(Guid orgId, IFormFile file, CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await importExportService.StartImportAsync(
-                orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);
-            return AcceptedAtVersionedAction(nameof(GetJob), new { orgId, jobId = result.JobId }, result);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var result = await importExportService.StartImportAsync(
+            orgId, file, currentUserService.GetRequiredUserId(), cancellationToken);
+        return AcceptedAtVersionedAction(nameof(GetJob), new { orgId, jobId = result.JobId }, result);
+
     }
 
     /// <summary>Start async organization data export.</summary>
@@ -68,16 +56,10 @@ public sealed class ImportExportController(
         [FromBody] CreateExportRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await importExportService.StartExportAsync(
-                orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
-            return AcceptedAtVersionedAction(nameof(GetJob), new { orgId, jobId = result.JobId }, result);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var result = await importExportService.StartExportAsync(
+            orgId, request, currentUserService.GetRequiredUserId(), cancellationToken);
+        return AcceptedAtVersionedAction(nameof(GetJob), new { orgId, jobId = result.JobId }, result);
+
     }
 
     /// <summary>List import/export jobs.</summary>
@@ -92,16 +74,10 @@ public sealed class ImportExportController(
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var jobs = await importExportService.ListJobsAsync(
-                orgId, currentUserService.GetRequiredUserId(), page, pageSize, cancellationToken);
-            return Ok(jobs);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var jobs = await importExportService.ListJobsAsync(
+            orgId, currentUserService.GetRequiredUserId(), page, pageSize, cancellationToken);
+        return Ok(jobs);
+
     }
 
     /// <summary>Get import/export job status.</summary>
@@ -112,16 +88,10 @@ public sealed class ImportExportController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetJob(Guid orgId, Guid jobId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var job = await importExportService.GetJobAsync(
-                orgId, jobId, currentUserService.GetRequiredUserId(), cancellationToken);
-            return job is null ? NotFound() : Ok(job);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var job = await importExportService.GetJobAsync(
+            orgId, jobId, currentUserService.GetRequiredUserId(), cancellationToken);
+        return job is null ? NotFound() : Ok(job);
+
     }
 
     /// <summary>Get SAS URL for job artifact download.</summary>
@@ -138,15 +108,9 @@ public sealed class ImportExportController(
         [FromQuery] string artifact = "result",
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var result = await importExportService.GetDownloadAsync(
-                orgId, jobId, artifact, currentUserService.GetRequiredUserId(), cancellationToken);
-            return result is null ? NotFound() : Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return ControllerExceptionMapper.Map(ex);
-        }
+        var result = await importExportService.GetDownloadAsync(
+            orgId, jobId, artifact, currentUserService.GetRequiredUserId(), cancellationToken);
+        return result is null ? NotFound() : Ok(result);
+
     }
 }

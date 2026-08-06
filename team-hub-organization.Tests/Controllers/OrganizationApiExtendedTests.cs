@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
+using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
 namespace team_hub_organization.Tests.Controllers;
@@ -368,8 +369,7 @@ public class OrganizationsControllerTransferLeaveTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
         var controller = OrganizationsControllerTestHelpers.CreateController(db, ownerId);
 
-        var result = await controller.Leave(organization.Id, CancellationToken.None);
-
-        Assert.IsType<ConflictObjectResult>(result);
+        await Assert.ThrowsAsync<OrganizationConflictException>(() =>
+            controller.Leave(organization.Id, CancellationToken.None));
     }
 }

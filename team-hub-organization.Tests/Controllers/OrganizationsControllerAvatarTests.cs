@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using team_hub_organization.Dtos;
+using team_hub_organization.Services.Organizations;
 
 namespace team_hub_organization.Tests.Controllers;
 
@@ -49,9 +50,8 @@ public class OrganizationsControllerAvatarTests
             ContentType = "text/plain"
         };
 
-        var result = await controller.UploadAvatar(organization.Id, file, CancellationToken.None);
-
-        Assert.IsType<BadRequestObjectResult>(result);
+        await Assert.ThrowsAsync<OrganizationAvatarValidationException>(() =>
+            controller.UploadAvatar(organization.Id, file, CancellationToken.None));
     }
 
     [Fact]
