@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -11,7 +14,9 @@ namespace team_hub_organization.Services.Members.AllMembers;
 public sealed class MemberService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
-    IActivityRecorder activity) : IMemberService
+    IActivityRecorder activity,
+    IAuditRecorder audit,
+    IOptions<OrganizationQuotasOptions> quotas) : IMemberService
 {
     public async Task<IReadOnlyList<MemberResponse>> ListAsync(
         Guid organizationId,
@@ -80,6 +85,13 @@ public sealed class MemberService(
                 m => m.OrganizationId == organizationId && m.UserId == request.UserId,
                 cancellationToken))
             throw new OrganizationConflictException("User is already a member of this organization.");
+
+        var memberCount = await db.OrganizationMembers.CountAsync(
+            m => m.OrganizationId == organizationId,
+            cancellationToken);
+        if (memberCount >= quotas.Value.MaxMembersPerOrg)
+            throw new OrganizationQuotaExceededException(
+                $"Member quota exceeded (max {quotas.Value.MaxMembersPerOrg} members per organization).");
 
         var roles = await ResolveOrgRolesAsync(organizationId, request.RoleIds, cancellationToken);
         foreach (var role in roles)
@@ -173,6 +185,15 @@ public sealed class MemberService(
         activity.Record(
             organizationId,
             ActivityTypes.MemberRolesChanged,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Member,
+            entityId: userId,
+            details: new { fromRoles = fromRoleNames, toRoles = toRoleNames },
+            occurredAt: now);
+        audit.Record(
+            organizationId,
+            AuditActions.MemberRolesChanged,
             actorUserId,
             targetUserId: userId,
             entityType: ActivityEntityTypes.Member,

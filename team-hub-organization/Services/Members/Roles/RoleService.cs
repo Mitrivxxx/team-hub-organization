@@ -3,6 +3,7 @@ using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -11,7 +12,8 @@ namespace team_hub_organization.Services.Members.Roles;
 public sealed class RoleService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
-    IActivityRecorder activity) : IRoleService
+    IActivityRecorder activity,
+    IAuditRecorder audit) : IRoleService
 {
     public async Task<IReadOnlyList<RoleListItemResponse>> ListAsync(
         Guid organizationId,
@@ -82,6 +84,13 @@ public sealed class RoleService(
             entityType: ActivityEntityTypes.Role,
             entityId: role.Id,
             details: new { name = role.Name, scope = request.Scope.ToUpperInvariant() });
+        audit.Record(
+            organizationId,
+            AuditActions.RoleCreated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = request.Scope.ToUpperInvariant() });
         await db.SaveChangesAsync(cancellationToken);
 
         return (await GetAsync(organizationId, role.Id, actorUserId, cancellationToken))!;
@@ -135,6 +144,13 @@ public sealed class RoleService(
             entityType: ActivityEntityTypes.Role,
             entityId: role.Id,
             details: new { name = role.Name, scope = role.Scope == RoleScope.Org ? "ORG" : "TEAM" });
+        audit.Record(
+            organizationId,
+            AuditActions.RoleUpdated,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = role.Scope == RoleScope.Org ? "ORG" : "TEAM" });
         await db.SaveChangesAsync(cancellationToken);
         return await GetAsync(organizationId, roleId, actorUserId, cancellationToken);
     }
@@ -165,6 +181,13 @@ public sealed class RoleService(
         activity.Record(
             organizationId,
             ActivityTypes.RoleDeleted,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: role.Id,
+            details: new { name = role.Name, scope = role.Scope == RoleScope.Org ? "ORG" : "TEAM" });
+        audit.Record(
+            organizationId,
+            AuditActions.RoleDeleted,
             actorUserId,
             entityType: ActivityEntityTypes.Role,
             entityId: role.Id,
@@ -216,6 +239,18 @@ public sealed class RoleService(
                 changeType = "Replaced",
                 permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
             });
+        audit.Record(
+            organizationId,
+            AuditActions.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Replaced",
+                permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
+            });
         await db.SaveChangesAsync(cancellationToken);
 
         return await LoadPermissionsAsync(roleId, cancellationToken);
@@ -257,6 +292,18 @@ public sealed class RoleService(
                 changeType = "Added",
                 permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
             });
+        audit.Record(
+            organizationId,
+            AuditActions.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Added",
+                permissionCodes = permissions.Select(p => p.Code).OrderBy(c => c).ToArray()
+            });
         await db.SaveChangesAsync(cancellationToken);
         return await LoadPermissionsAsync(roleId, cancellationToken);
     }
@@ -287,6 +334,18 @@ public sealed class RoleService(
         activity.Record(
             organizationId,
             ActivityTypes.RolePermissionsChanged,
+            actorUserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new
+            {
+                roleName = role.Name,
+                changeType = "Removed",
+                permissionCodes = permissionCode is null ? Array.Empty<string>() : new[] { permissionCode }
+            });
+        audit.Record(
+            organizationId,
+            AuditActions.RolePermissionsChanged,
             actorUserId,
             entityType: ActivityEntityTypes.Role,
             entityId: roleId,
@@ -370,6 +429,14 @@ public sealed class RoleService(
             entityType: ActivityEntityTypes.Role,
             entityId: roleId,
             details: new { roleName = role.Name });
+        audit.Record(
+            organizationId,
+            AuditActions.RoleMemberAssigned,
+            actorUserId,
+            targetUserId: request.UserId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new { roleName = role.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         return new MemberSummaryDto { UserId = member.UserId, JoinedAt = member.JoinedAt };
@@ -410,6 +477,14 @@ public sealed class RoleService(
         activity.Record(
             organizationId,
             ActivityTypes.RoleMemberRevoked,
+            actorUserId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Role,
+            entityId: roleId,
+            details: new { roleName = role.Name });
+        audit.Record(
+            organizationId,
+            AuditActions.RoleMemberRevoked,
             actorUserId,
             targetUserId: userId,
             entityType: ActivityEntityTypes.Role,

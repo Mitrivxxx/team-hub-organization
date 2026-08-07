@@ -16,20 +16,27 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<InvitationOrgRole> InvitationOrgRoles => Set<InvitationOrgRole>();
     public DbSet<OrganizationActivity> OrganizationActivities => Set<OrganizationActivity>();
+    public DbSet<OrganizationAuditEvent> OrganizationAuditEvents => Set<OrganizationAuditEvent>();
     public DbSet<ImportExportJob> ImportExportJobs => Set<ImportExportJob>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Organization>(e =>
         {
             e.ToTable("organizations");
-            e.HasIndex(o => o.Slug).IsUnique();
-            e.HasIndex(o => o.Email).IsUnique().HasFilter("\"Email\" <> ''");
+            e.HasIndex(o => o.Slug).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
+            e.HasIndex(o => o.Email).IsUnique().HasFilter("\"DeletedAt\" IS NULL AND \"Email\" <> ''");
+            e.HasIndex(o => new { o.Status, o.DeletedAt });
             e.Property(o => o.Name).HasMaxLength(100);
             e.Property(o => o.Slug).HasMaxLength(100);
             e.Property(o => o.Description).HasMaxLength(500);
             e.Property(o => o.Nip).HasMaxLength(20);
             e.Property(o => o.Email).HasMaxLength(255);
+            e.Property(o => o.Status)
+                .HasConversion(v => v.ToString().ToUpperInvariant(), v => Enum.Parse<OrganizationStatus>(v, true))
+                .HasMaxLength(20)
+                .HasDefaultValue(OrganizationStatus.Active);
             e.OwnsOne(o => o.Address, a =>
             {
                 a.Property(x => x.Country).HasColumnName("Country").HasMaxLength(100);
@@ -163,6 +170,33 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.Property(j => j.OptionsJson).HasColumnType("jsonb");
             e.Property(j => j.ErrorMessage).HasMaxLength(2000);
             e.HasOne(j => j.Organization).WithMany().HasForeignKey(j => j.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrganizationAuditEvent>(e =>
+        {
+            e.ToTable("organization_audit_events");
+            e.HasIndex(a => new { a.OrganizationId, a.OccurredAt });
+            e.HasIndex(a => new { a.OrganizationId, a.Action, a.OccurredAt });
+            e.Property(a => a.Action).HasMaxLength(64);
+            e.Property(a => a.EntityType).HasMaxLength(64);
+            e.Property(a => a.CorrelationId).HasMaxLength(64);
+            e.Property(a => a.Details).HasColumnType("jsonb");
+            e.HasOne(a => a.Organization)
+                .WithMany()
+                .HasForeignKey(a => a.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<IdempotencyRecord>(e =>
+        {
+            e.ToTable("idempotency_records");
+            e.HasIndex(r => new { r.UserId, r.Key, r.RequestPath }).IsUnique();
+            e.HasIndex(r => r.CreatedAt);
+            e.Property(r => r.Key).HasMaxLength(128);
+            e.Property(r => r.RequestPath).HasMaxLength(512);
+            e.Property(r => r.RequestHash).HasMaxLength(64);
+            e.Property(r => r.ResponseContentType).HasMaxLength(128);
+            e.Property(r => r.ResponseBody).HasColumnType("jsonb");
         });
     }
 }

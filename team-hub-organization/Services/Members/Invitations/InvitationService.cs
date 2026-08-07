@@ -1,9 +1,12 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -12,7 +15,9 @@ namespace team_hub_organization.Services.Members.Invitations;
 public sealed class InvitationService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
-    IActivityRecorder activity) : IInvitationService
+    IActivityRecorder activity,
+    IAuditRecorder audit,
+    IOptions<OrganizationQuotasOptions> quotas) : IInvitationService
 {
     static readonly TimeSpan DefaultExpiry = TimeSpan.FromDays(7);
 
@@ -95,6 +100,23 @@ public sealed class InvitationService(
 
         if (pendingExists)
             throw new OrganizationConflictException("A pending invitation already exists for this email.");
+
+        var pendingCount = await db.Invitations.CountAsync(
+            i => i.OrganizationId == organizationId
+                 && i.Status == InvitationStatus.Pending
+                 && i.ExpiresAt > DateTimeOffset.UtcNow,
+            cancellationToken);
+        if (pendingCount >= quotas.Value.MaxPendingInvitesPerOrg)
+            throw new OrganizationQuotaExceededException(
+                $"Pending invitation quota exceeded (max {quotas.Value.MaxPendingInvitesPerOrg} pending invites per organization).");
+
+        // Accept also creates a member — reserve a seat.
+        var memberCount = await db.OrganizationMembers.CountAsync(
+            m => m.OrganizationId == organizationId,
+            cancellationToken);
+        if (memberCount >= quotas.Value.MaxMembersPerOrg)
+            throw new OrganizationQuotaExceededException(
+                $"Member quota exceeded (max {quotas.Value.MaxMembersPerOrg} members per organization).");
 
         var now = DateTimeOffset.UtcNow;
         var invitation = new Invitation
@@ -219,6 +241,13 @@ public sealed class InvitationService(
                 cancellationToken))
             throw new OrganizationConflictException("User is already a member of this organization.");
 
+        var memberCount = await db.OrganizationMembers.CountAsync(
+            m => m.OrganizationId == invitation.OrganizationId,
+            cancellationToken);
+        if (memberCount >= quotas.Value.MaxMembersPerOrg)
+            throw new OrganizationQuotaExceededException(
+                $"Member quota exceeded (max {quotas.Value.MaxMembersPerOrg} members per organization).");
+
         var orgRoleIds = await db.InvitationOrgRoles.AsNoTracking()
             .Where(x => x.InvitationId == invitation.Id)
             .Select(x => x.RoleId)
@@ -275,6 +304,15 @@ public sealed class InvitationService(
         activity.Record(
             invitation.OrganizationId,
             ActivityTypes.InvitationAccepted,
+            userId,
+            targetUserId: userId,
+            entityType: ActivityEntityTypes.Invitation,
+            entityId: invitation.Id,
+            details: new { email = invitation.Email, roles = roleNames },
+            occurredAt: now);
+        audit.Record(
+            invitation.OrganizationId,
+            AuditActions.InvitationAccepted,
             userId,
             targetUserId: userId,
             entityType: ActivityEntityTypes.Invitation,

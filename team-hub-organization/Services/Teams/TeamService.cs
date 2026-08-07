@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TeamHub.BlobStorage;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
@@ -13,6 +15,7 @@ public sealed class TeamService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
     IActivityRecorder activity,
+    IOptions<OrganizationQuotasOptions> quotas,
     IServiceProvider serviceProvider) : ITeamService
 {
     IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
@@ -61,6 +64,13 @@ public sealed class TeamService(
         CancellationToken cancellationToken = default)
     {
         await authz.EnsurePermissionAsync(organizationId, actorUserId, OrganizationPermissionCodes.OrgTeamsManage, cancellationToken);
+
+        var teamCount = await db.Teams.CountAsync(
+            t => t.OrganizationId == organizationId && t.DeletedAt == null,
+            cancellationToken);
+        if (teamCount >= quotas.Value.MaxTeamsPerOrg)
+            throw new OrganizationQuotaExceededException(
+                $"Team quota exceeded (max {quotas.Value.MaxTeamsPerOrg} teams per organization).");
 
         var now = DateTimeOffset.UtcNow;
         var team = new Team
@@ -137,6 +147,12 @@ public sealed class TeamService(
 
         team.DeletedAt = DateTimeOffset.UtcNow;
         team.UpdatedAt = team.DeletedAt.Value;
+
+        var teamMembers = await db.TeamMembers
+            .Where(tm => tm.TeamId == teamId)
+            .ToListAsync(cancellationToken);
+        db.TeamMembers.RemoveRange(teamMembers);
+
         activity.Record(
             organizationId,
             ActivityTypes.TeamDeleted,

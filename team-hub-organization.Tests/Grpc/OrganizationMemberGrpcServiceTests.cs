@@ -1,9 +1,14 @@
 using Grpc.Core;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using TeamHub.GrpcContracts.Organization.V1;
+using team_hub_organization.Configuration.Options;
+using team_hub_organization.Data;
 using team_hub_organization.Grpc;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Tests.Controllers;
 
@@ -11,6 +16,18 @@ namespace team_hub_organization.Tests.Grpc;
 
 public class OrganizationMemberGrpcServiceTests
 {
+
+    static MemberService CreateMemberService(OrganizationDbContext db, OrganizationAuthorizationService authz)
+    {
+        var httpContext = new DefaultHttpContext();
+        return new MemberService(
+            db,
+            authz,
+            new ActivityRecorder(db),
+            new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext }),
+            Options.Create(new OrganizationQuotasOptions()));
+    }
+
     [Fact]
     public async Task ListMembers_ReturnsMappedMembers()
     {
@@ -19,7 +36,7 @@ public class OrganizationMemberGrpcServiceTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, userId);
         var authz = new OrganizationAuthorizationService(db);
         var service = new OrganizationMemberGrpcService(
-            new MemberService(db, authz, new ActivityRecorder(db)),
+            CreateMemberService(db, authz),
             new ActivityService(db, authz));
 
         var response = await service.ListMembers(
@@ -43,7 +60,7 @@ public class OrganizationMemberGrpcServiceTests
         var (organization, _, _, _) = await OrganizationsControllerTestHelpers.SeedOrganizationAsync(db, ownerId);
         var authz = new OrganizationAuthorizationService(db);
         var service = new OrganizationMemberGrpcService(
-            new MemberService(db, authz, new ActivityRecorder(db)),
+            CreateMemberService(db, authz),
             new ActivityService(db, authz));
 
         var ex = await Assert.ThrowsAsync<RpcException>(() => service.ListMembers(
@@ -69,7 +86,7 @@ public class OrganizationMemberGrpcServiceTests
         await db.SaveChangesAsync();
 
         var service = new OrganizationMemberGrpcService(
-            new MemberService(db, authz, activity),
+            CreateMemberService(db, authz),
             new ActivityService(db, authz));
 
         var response = await service.ListActivity(

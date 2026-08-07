@@ -35,22 +35,27 @@
 - Endpoints (base `/api/organizations/v1`, JWT required):
   - `GET /health` — PostgreSQL health check (`200` healthy, `503` unhealthy)
   - `GET /metrics` — Prometheus metrics
-  - Organization: `POST /`, `GET /`, `GET /{orgId}`, `GET /by-slug/{slug}`, `PATCH /{orgId}`, `PUT|DELETE /{orgId}/avatar`, `DELETE /{orgId}`, `POST /{orgId}/transfer-ownership`, `POST /{orgId}/leave`
-    - Create body: `name`, optional `slug`/`description`, required `nip` (10 digits) + `address` (`country`, `city`, `postalCode`); response includes auto-generated `email` (`{name}{4digits}@teamhub.local`)
-    - Organization model fields: `Nip`, `Email`, owned `Address` (`Country`, `City`, `PostalCode`)
+  - Organization: `POST /`, `GET /`, `GET /{orgId}`, `GET /by-slug/{slug}`, `PATCH /{orgId}`, `PATCH /{orgId}/status`, `PUT|DELETE /{orgId}/avatar`, `DELETE /{orgId}`, `POST /{orgId}/restore`, `POST /{orgId}/transfer-ownership`, `POST /{orgId}/leave`
+    - Create body: `name`, optional `slug`/`description`, required `nip` (10 digits; MVP PL OK — checksum/REGON/EU VAT later) + `address` (`country`, `city`, `postalCode`); response includes auto-generated `email` (`{name}{4digits}@teamhub.local`) and `status` (`active`|`suspended`|`archived`)
+    - Organization model fields: `Nip`, `Email`, owned `Address` (`Country`, `City`, `PostalCode`), `Status`, `DeletedAt`
+    - Lifecycle: `DELETE` requires completed export within `OrganizationLifecycle:RetentionDays` (default 30) else `409`; soft-delete sets `DeletedAt` + `Archived`; `POST .../restore` within window else `410`; purge hard-deletes + blobs after retention; `suspended`/`archived` are read-only (except status PATCH / delete); team soft-delete clears `team_members`; `IOrganizationLifecycleNotifier` NoOp on close
   - Members: `GET|POST /{orgId}/members` (`GET` optional `?roleId=&teamId=`), `GET|PATCH|DELETE /{orgId}/members/{userId}`, `GET /{orgId}/members/{userId}/teams` — body uses `roleIds[]`
   - Membership lookup uses composite PK `(OrganizationId, UserId)` on `organization_members` (conflict check on add).
 - Internal gRPC (not via gateway): `OrganizationMemberService.ListMembers` + `ListActivity` on port `5102` (dev) / `8081` (docker).
 - Kestrel: REST/health on `8080` (Http1AndHttp2), gRPC on `8081` (Http2 only).
 - Shared contracts: `building-blocks/TeamHub.GrpcContracts` (`Protos/organization/v1/members.proto`).
 - User profiles (name/surname) stay in auth; BFF GraphQL composes them for All Members and Activity UI. Organization resolves users for import via auth gRPC `ResolveUsers` (`Grpc__Auth`).
-  - Activity: `GET /{orgId}/activity` (member-only; `type`, `q`, `from`, `to`, `page`, `pageSize`); append-only `organization_activities`
+  - Activity: `GET /{orgId}/activity` (member-only; `type`, `q`, `from`, `to`, `page`, `pageSize`); append-only `organization_activities` (UI/ops feed — not compliance audit)
+  - Compliance audit: append-only `organization_audit_events` via `IAuditRecorder` for ownership transfer, org delete, role changes, invite accept
+  - Quotas (`Quotas__*`): hard limits max orgs/user, members/org, teams/org, pending invites/org (no billing)
+  - Retention (`OrganizationLifecycle__*`): soft-delete purge after `RetentionDays`; activity TTL; import artifact TTL; idempotency TTL (`OrganizationPurgeBackgroundService`)
+  - Idempotency: optional `Idempotency-Key` header on `POST /`, `POST /{orgId}/invitations`, `POST /{orgId}/imports`
   - Stats: `GET /{orgId}/stats` (member-only; `{ memberCount, teamCount }`; teams exclude soft-deleted)
   - Import/Export: `POST /{orgId}/imports/preview`, `POST /{orgId}/imports` (`202`), `POST /{orgId}/exports` (`202`), `GET /{orgId}/import-export/jobs`, `GET /{orgId}/import-export/jobs/{jobId}`, `GET .../download?artifact=result|errors|source` — requires `org.members.manage`; async jobs + blob artifacts; CSV import matches existing auth users by email/username (partial success)
-  - Teams: CRUD under `/{orgId}/teams`, avatar, team members CRUD
+  - Teams: CRUD under `/{orgId}/teams`, avatar, team members CRUD; team soft-delete removes `team_members`
   - Roles: CRUD `/{orgId}/roles`, permission attach/replace/remove by `permissionId`, role members assign/list/revoke
   - Permissions: CRUD `/{orgId}/permissions` (org-scoped; system codes cloned on org create)
-  - Invitations: org-scoped list/create/get/cancel/resend (`orgRoleIds[]`); `invitations/by-token/{token}` get/accept/reject
+  - Invitations: org-scoped list/create/get/cancel/resend (`orgRoleIds[]`); `invitations/by-token/{token}` get/accept/reject; **link-only MVP** (token on create/resend; no email send)
   - Me: `GET /{orgId}/me` (roles union + permissions), `GET /me/invitations`
   - Demo (Development/Staging only): `GET /demo/context?index=1` — seeded ids for Swagger try-out
 - See `docs/organization.mb` for request bodies, status codes, authZ rules, and future domain event contracts.
@@ -74,7 +79,7 @@
 - DotNetEnv: `Env.TraversePath().Load()` runs only when `ASPNETCORE_ENVIRONMENT` is not `Production` (before `CreateBuilder`). Production uses `appsettings.Production.json` + compose `env_file` / Aspire env vars — not DotNetEnv.
 - Startup helpers in `Configuration/Extensions/WebApplicationExtensions.cs`: `RunSeedAndExitAsync` (`--seed`), `ApplyStartupSchemaAsync` (migrate + permission catalog; skipped in Testing).
 - Config layout: `Configuration/Options/` (DTOs + Swagger options), `Configuration/Middleware/` (HTTP), `Configuration/Extensions/` (DI + pipeline wiring).
-- DI registration is capability-based (same style as auth `AddRedisSessionStore`): infra adapters (`AddDatabase`, `AddJwtConfiguration`, `AddOrganizationBlobStorage`, `AddOrganizationGrpc`, `AddImportExportJobs`, `AddApiInfrastructure`) vs application (`AddApplicationServices` — domain services + import/export processor).
+- DI registration is capability-based (same style as auth `AddRedisSessionStore`): infra adapters (`AddDatabase`, `AddJwtConfiguration`, `AddOrganizationBlobStorage`, `AddOrganizationGrpc`, `AddImportExportJobs`, `AddOrganizationLifecycle`, `AddQuotas`, `AddApiInfrastructure`) vs application (`AddApplicationServices` — domain services + import/export processor + `IAuditRecorder`).
 - Dev Env: HTTP only on port `5002` (`launchSettings.json`).
 - Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
 - Docker healthcheck: interval `120s`, start-period `45s` (migrations + permission catalog on startup; `docker-compose.yml` + `Dockerfile`).
@@ -94,7 +99,7 @@
 - Postgres container `postgres-dev` (dev) and `postgres-prod` (prod) create both auth and organization databases via init script `infrastructure/postgres/init/01-create-dbs-{dev|prod}.sql` mounted at `/docker-entrypoint-initdb.d/`.
 - Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers (use prod connection string comments; compose injects via `env_file`, not DotNetEnv).
 - Dev avatar storage: Azurite via `docker-compose.dev.yml` or Aspire (`BlobStorage__ConnectionString`, `BlobStorage__PublicBlobEndpoint`); `avatarUrl` in API responses is a read-only SAS URL; DB stores internal blob path.
-- Avatar upload/delete returns `503` when blob storage is not configured (prod compose has no Azurite by design).
+- Production: `BlobStorage__ConnectionString` is **required** (fail-fast at startup). Avatar/import still return `503` only in non-Production when blob is unset.
 
 ## CI (GitHub Actions)
 - Workflow: `.github/workflows/ci.yml`.

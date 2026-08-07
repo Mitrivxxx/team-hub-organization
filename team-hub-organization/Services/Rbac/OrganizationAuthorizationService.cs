@@ -24,24 +24,49 @@ public sealed class OrganizationAuthorizationService(OrganizationDbContext db) :
             throw new OrganizationAccessException("User is not a member of this organization.");
     }
 
+    public async Task EnsureMutableAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        var status = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == organizationId && o.DeletedAt == null)
+            .Select(o => (OrganizationStatus?)o.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (status is null)
+            throw new OrganizationNotFoundException();
+
+        if (status is OrganizationStatus.Suspended or OrganizationStatus.Archived)
+            throw new OrganizationConflictException("Organization is read-only in the current status.");
+    }
+
     public async Task EnsurePermissionAsync(
         Guid organizationId,
         Guid userId,
         string permissionCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool requireMutable = true)
     {
         await EnsureMemberAsync(organizationId, userId, cancellationToken);
 
         if (!await HasPermissionAsync(organizationId, userId, permissionCode, cancellationToken))
             throw new OrganizationAccessException($"Missing permission '{permissionCode}'.");
+
+        if (requireMutable)
+            await EnsureMutableAsync(organizationId, cancellationToken);
     }
 
-    public async Task EnsureOwnerAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
+    public async Task EnsureOwnerAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default,
+        bool requireMutable = true)
     {
         await EnsureMemberAsync(organizationId, userId, cancellationToken);
 
         if (!await IsOwnerAsync(organizationId, userId, cancellationToken))
             throw new OrganizationAccessException("Only organization owners can perform this action.");
+
+        if (requireMutable)
+            await EnsureMutableAsync(organizationId, cancellationToken);
     }
 
     public Task<bool> IsOwnerAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default) =>

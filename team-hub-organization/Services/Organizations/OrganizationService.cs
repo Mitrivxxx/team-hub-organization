@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TeamHub.BlobStorage;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Rbac;
 
 namespace team_hub_organization.Services.Organizations;
@@ -12,12 +15,32 @@ public sealed class OrganizationService(
     OrganizationDbContext db,
     IOrganizationAuthorizationService authz,
     IActivityRecorder activity,
+    IAuditRecorder audit,
+    IOrganizationLifecycleNotifier lifecycleNotifier,
+    IOptions<OrganizationLifecycleOptions> lifecycleOptions,
+    IOptions<OrganizationQuotasOptions> quotas,
     IServiceProvider serviceProvider) : IOrganizationService
 {
     IBlobStorageService? BlobStorage => serviceProvider.GetService<IBlobStorageService>();
+    OrganizationLifecycleOptions Lifecycle => lifecycleOptions.Value;
 
     public async Task<OrganizationResponse> CreateAsync(CreateOrganizationRequest request, Guid userId, CancellationToken cancellationToken = default)
     {
+        var ownedOrgCount = await db.OrganizationMemberRoles.AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .Join(db.Roles.AsNoTracking(), m => m.RoleId, r => r.Id, (m, r) => new { m, r })
+            .Where(x => x.r.Name == SystemRoleNames.Owner && x.r.Scope == RoleScope.Org)
+            .Join(
+                db.Organizations.AsNoTracking().Where(o => o.DeletedAt == null),
+                x => x.m.OrganizationId,
+                o => o.Id,
+                (_, _) => 1)
+            .CountAsync(cancellationToken);
+
+        if (ownedOrgCount >= quotas.Value.MaxOrgsPerUser)
+            throw new OrganizationQuotaExceededException(
+                $"Organization quota exceeded (max {quotas.Value.MaxOrgsPerUser} organizations per user).");
+
         var now = DateTimeOffset.UtcNow;
         string slug;
 
@@ -25,19 +48,19 @@ public sealed class OrganizationService(
         {
             var baseSlug = SlugHelper.GenerateFromName(request.Name);
             slug = await SlugHelper.EnsureUniqueSlugAsync(
-                candidate => db.Organizations.AnyAsync(o => o.Slug == candidate, cancellationToken),
+                candidate => db.Organizations.AnyAsync(o => o.Slug == candidate && o.DeletedAt == null, cancellationToken),
                 baseSlug,
                 cancellationToken);
         }
         else
         {
             slug = request.Slug.Trim().ToLowerInvariant();
-            if (await db.Organizations.AnyAsync(o => o.Slug == slug, cancellationToken))
+            if (await db.Organizations.AnyAsync(o => o.Slug == slug && o.DeletedAt == null, cancellationToken))
                 throw new OrganizationConflictException("Organization slug is already taken.");
         }
 
         var email = await OrganizationEmailHelper.GenerateUniqueEmailAsync(
-            candidate => db.Organizations.AnyAsync(o => o.Email == candidate, cancellationToken),
+            candidate => db.Organizations.AnyAsync(o => o.Email == candidate && o.DeletedAt == null, cancellationToken),
             request.Name,
             cancellationToken);
 
@@ -55,6 +78,7 @@ public sealed class OrganizationService(
                 City = request.Address.City.Trim(),
                 PostalCode = request.Address.PostalCode.Trim()
             },
+            Status = OrganizationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -189,6 +213,46 @@ public sealed class OrganizationService(
         return ToResponse(organization);
     }
 
+    public async Task<OrganizationResponse?> UpdateStatusAsync(
+        Guid organizationId,
+        UpdateOrganizationStatusRequest request,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var organization = await db.Organizations
+            .FirstOrDefaultAsync(o => o.Id == organizationId && o.DeletedAt == null, cancellationToken);
+
+        if (organization is null)
+            return null;
+
+        await authz.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            OrganizationPermissionCodes.OrgManage,
+            cancellationToken,
+            requireMutable: false);
+
+        if (!TryParseStatus(request.Status, out var newStatus))
+            throw new OrganizationValidationException("Status must be active, suspended, or archived.");
+
+        if (organization.Status == newStatus)
+            return ToResponse(organization);
+
+        var previous = organization.Status;
+        organization.Status = newStatus;
+        organization.UpdatedAt = DateTimeOffset.UtcNow;
+        activity.Record(
+            organizationId,
+            ActivityTypes.OrganizationStatusChanged,
+            userId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            details: new { from = previous.ToString().ToLowerInvariant(), to = newStatus.ToString().ToLowerInvariant() });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return ToResponse(organization);
+    }
+
     public async Task<bool> SoftDeleteAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
     {
         var organization = await db.Organizations
@@ -197,10 +261,36 @@ public sealed class OrganizationService(
         if (organization is null)
             return false;
 
-        await authz.EnsurePermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgDelete, cancellationToken);
+        await authz.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            OrganizationPermissionCodes.OrgDelete,
+            cancellationToken,
+            requireMutable: false);
 
-        organization.DeletedAt = DateTimeOffset.UtcNow;
-        organization.UpdatedAt = organization.DeletedAt.Value;
+        var exportCutoff = DateTimeOffset.UtcNow.AddDays(-Lifecycle.RetentionDays);
+        var hasRecentExport = await db.ImportExportJobs.AsNoTracking()
+            .AnyAsync(
+                j => j.OrganizationId == organizationId
+                     && j.Type == ImportExportJobType.Export
+                     && j.Status == ImportExportJobStatus.Completed
+                     && j.CompletedAt != null
+                     && j.CompletedAt >= exportCutoff,
+                cancellationToken);
+
+        if (!hasRecentExport)
+            throw new OrganizationConflictException(
+                $"A completed export within the last {Lifecycle.RetentionDays} days is required before delete.");
+
+        var memberUserIds = await db.OrganizationMembers.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId)
+            .Select(m => m.UserId)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        organization.DeletedAt = now;
+        organization.Status = OrganizationStatus.Archived;
+        organization.UpdatedAt = now;
         activity.Record(
             organizationId,
             ActivityTypes.OrganizationDeleted,
@@ -208,9 +298,64 @@ public sealed class OrganizationService(
             entityType: ActivityEntityTypes.Organization,
             entityId: organizationId,
             details: new { name = organization.Name });
+        audit.Record(
+            organizationId,
+            AuditActions.OrganizationDeleted,
+            userId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            details: new { name = organization.Name });
         await db.SaveChangesAsync(cancellationToken);
 
+        await lifecycleNotifier.NotifyClosingAsync(organizationId, memberUserIds, cancellationToken);
+
         return true;
+    }
+
+    public async Task<OrganizationResponse> RestoreAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var organization = await db.Organizations
+            .FirstOrDefaultAsync(o => o.Id == organizationId && o.DeletedAt != null, cancellationToken)
+            ?? throw new OrganizationNotFoundException();
+
+        if (!await authz.IsMemberAsync(organizationId, userId, cancellationToken))
+            throw new OrganizationAccessException("User is not a member of this organization.");
+
+        if (!await authz.HasPermissionAsync(organizationId, userId, OrganizationPermissionCodes.OrgDelete, cancellationToken))
+            throw new OrganizationAccessException($"Missing permission '{OrganizationPermissionCodes.OrgDelete}'.");
+
+        var deletedAt = organization.DeletedAt!.Value;
+        var deadline = deletedAt.AddDays(Lifecycle.RetentionDays);
+        if (DateTimeOffset.UtcNow > deadline)
+            throw new OrganizationGoneException("Restore window has expired; organization is pending purge.");
+
+        if (await db.Organizations.AnyAsync(
+                o => o.Id != organizationId && o.Slug == organization.Slug && o.DeletedAt == null,
+                cancellationToken))
+            throw new OrganizationConflictException("Organization slug is already taken.");
+
+        if (!string.IsNullOrEmpty(organization.Email)
+            && await db.Organizations.AnyAsync(
+                o => o.Id != organizationId && o.Email == organization.Email && o.DeletedAt == null,
+                cancellationToken))
+            throw new OrganizationConflictException("Organization email is already taken.");
+
+        organization.DeletedAt = null;
+        organization.Status = OrganizationStatus.Active;
+        organization.UpdatedAt = DateTimeOffset.UtcNow;
+        activity.Record(
+            organizationId,
+            ActivityTypes.OrganizationRestored,
+            userId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            details: new { name = organization.Name });
+        await db.SaveChangesAsync(cancellationToken);
+
+        return ToResponse(organization);
     }
 
     public async Task TransferOwnershipAsync(
@@ -295,12 +440,21 @@ public sealed class OrganizationService(
             entityType: ActivityEntityTypes.Organization,
             entityId: organizationId,
             occurredAt: now);
+        audit.Record(
+            organizationId,
+            AuditActions.OwnershipTransferred,
+            actorUserId,
+            targetUserId: newOwnerUserId,
+            entityType: ActivityEntityTypes.Organization,
+            entityId: organizationId,
+            occurredAt: now);
         await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task LeaveAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
     {
         await authz.EnsureMemberAsync(organizationId, userId, cancellationToken);
+        await authz.EnsureMutableAsync(organizationId, cancellationToken);
 
         if (await authz.IsOwnerAsync(organizationId, userId, cancellationToken))
         {
@@ -361,9 +515,20 @@ public sealed class OrganizationService(
             PostalCode = organization.Address.PostalCode
         },
         AvatarUrl = OrganizationAvatarService.ResolveAvatarUrl(organization.AvatarUrl, BlobStorage),
+        Status = organization.Status.ToString().ToLowerInvariant(),
         CreatedAt = organization.CreatedAt,
         UpdatedAt = organization.UpdatedAt
     };
+
+    static bool TryParseStatus(string raw, out OrganizationStatus status)
+    {
+        status = default;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        return Enum.TryParse(raw.Trim(), ignoreCase: true, out status)
+               && Enum.IsDefined(status);
+    }
 
     static bool IsSlugConflict(DbUpdateException ex) =>
         ex.InnerException?.Message.Contains("IX_organizations_Slug", StringComparison.OrdinalIgnoreCase) == true

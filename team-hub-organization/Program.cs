@@ -21,9 +21,11 @@ builder.Services.AddTeamHubOpenTelemetry(builder.Configuration, "team-hub-organi
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddOrganizationHealthChecks(builder.Configuration);
 builder.Services.AddJwtConfiguration(builder.Configuration);
-builder.Services.AddOrganizationBlobStorage(builder.Configuration);
+builder.Services.AddOrganizationBlobStorage(builder.Configuration, builder.Environment);
 builder.Services.AddOrganizationGrpc(builder.Configuration);
 builder.Services.AddImportExportJobs();
+builder.Services.AddOrganizationLifecycle(builder.Configuration);
+builder.Services.AddQuotas(builder.Configuration);
 builder.Services.AddApiInfrastructure();
 builder.Services.AddValidation();
 builder.Services.AddApplicationServices();

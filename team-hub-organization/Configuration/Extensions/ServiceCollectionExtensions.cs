@@ -20,6 +20,7 @@ using team_hub_organization.Services.Demo;
 using team_hub_organization.Services.Me;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Members.ImportExport;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
@@ -139,8 +140,21 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddOrganizationBlobStorage(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddOrganizationBlobStorage(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
+        var section = configuration.GetSection(BlobStorageOptions.SectionName);
+        var connectionString = section[nameof(BlobStorageOptions.ConnectionString)]
+            ?? configuration.GetConnectionString("blobs");
+
+        if (environment?.IsProduction() == true && string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "BlobStorage:ConnectionString is required in Production (Azure Blob or equivalent).");
+        }
+
         services.AddTeamHubBlobStorage(configuration);
         return services;
     }
@@ -164,8 +178,30 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddOrganizationLifecycle(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<OrganizationLifecycleOptions>()
+            .Bind(configuration.GetSection(OrganizationLifecycleOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddHostedService<OrganizationPurgeBackgroundService>();
+        return services;
+    }
+
+    public static IServiceCollection AddQuotas(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<OrganizationQuotasOptions>()
+            .Bind(configuration.GetSection(OrganizationQuotasOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        return services;
+    }
+
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
+        services.AddSingleton<IOrganizationLifecycleNotifier, NoOpOrganizationLifecycleNotifier>();
         services.AddScoped<IImportExportService, ImportExportService>();
         services.AddScoped<IImportExportJobProcessor, ImportExportJobProcessor>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -182,6 +218,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMeService, MeService>();
         services.AddScoped<IDemoSeedContextService, DemoSeedContextService>();
         services.AddScoped<IActivityRecorder, ActivityRecorder>();
+        services.AddScoped<IAuditRecorder, AuditRecorder>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IOrganizationStatsService, OrganizationStatsService>();
         return services;

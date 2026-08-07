@@ -5,8 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using TeamHub.BlobStorage;
-using team_hub_organization.Controllers;
+using team_hub_organization.Configuration.Options;
 using team_hub_organization.Controllers.Me;
 using team_hub_organization.Controllers.Members;
 using team_hub_organization.Controllers.Organizations;
@@ -18,6 +19,7 @@ using team_hub_organization.Services;
 using team_hub_organization.Services.Me;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
+using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
 using team_hub_organization.Services.Members.Roles;
@@ -30,6 +32,12 @@ namespace team_hub_organization.Tests.Controllers;
 
 internal static class OrganizationsControllerTestHelpers
 {
+    static readonly IOptions<OrganizationQuotasOptions> DefaultQuotas =
+        Options.Create(new OrganizationQuotasOptions());
+
+    static readonly IOptions<OrganizationLifecycleOptions> DefaultLifecycle =
+        Options.Create(new OrganizationLifecycleOptions());
+
     public static OrganizationDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<OrganizationDbContext>()
@@ -56,8 +64,17 @@ internal static class OrganizationsControllerTestHelpers
         var currentUserService = new TestCurrentUserService(userId);
         var authz = new OrganizationAuthorizationService(db);
         var activity = new ActivityRecorder(db);
+        var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
         var serviceProvider = CreateServiceProvider(blobStorageService);
-        organizationService ??= new OrganizationService(db, authz, activity, serviceProvider);
+        organizationService ??= new OrganizationService(
+            db,
+            authz,
+            activity,
+            audit,
+            new NoOpOrganizationLifecycleNotifier(),
+            DefaultLifecycle,
+            DefaultQuotas,
+            serviceProvider);
         organizationAvatarService ??= new OrganizationAvatarService(db, authz, serviceProvider);
 
         return new OrganizationsController(organizationService, organizationAvatarService, currentUserService, NullLogger<OrganizationsController>.Instance)
@@ -69,8 +86,14 @@ internal static class OrganizationsControllerTestHelpers
         };
     }
 
-    public static MembersController CreateMembersController(OrganizationDbContext db, Guid userId) =>
-        new(new MemberService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
+    public static MembersController CreateMembersController(OrganizationDbContext db, Guid userId)
+    {
+        var httpContext = new DefaultHttpContext { User = CreatePrincipal(userId) };
+        var authz = new OrganizationAuthorizationService(db);
+        var activity = new ActivityRecorder(db);
+        var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
+        return new(new MemberService(db, authz, activity, audit, DefaultQuotas), new TestCurrentUserService(userId));
+    }
 
     public static ActivityController CreateActivityController(OrganizationDbContext db, Guid userId) =>
         new(new ActivityService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
@@ -78,8 +101,14 @@ internal static class OrganizationsControllerTestHelpers
     public static StatisticsController CreateStatisticsController(OrganizationDbContext db, Guid userId) =>
         new(new OrganizationStatsService(db, new OrganizationAuthorizationService(db)), new TestCurrentUserService(userId));
 
-    public static RolesController CreateRolesController(OrganizationDbContext db, Guid userId) =>
-        new(new RoleService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
+    public static RolesController CreateRolesController(OrganizationDbContext db, Guid userId)
+    {
+        var httpContext = new DefaultHttpContext { User = CreatePrincipal(userId) };
+        var authz = new OrganizationAuthorizationService(db);
+        var activity = new ActivityRecorder(db);
+        var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
+        return new(new RoleService(db, authz, activity, audit), new TestCurrentUserService(userId));
+    }
 
     public static PermissionsController CreatePermissionsController(OrganizationDbContext db, Guid userId) =>
         new(new PermissionService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)), new TestCurrentUserService(userId));
@@ -89,7 +118,7 @@ internal static class OrganizationsControllerTestHelpers
         var authz = new OrganizationAuthorizationService(db);
         var sp = CreateServiceProvider(blob);
         return new TeamsController(
-            new TeamService(db, authz, new ActivityRecorder(db), sp),
+            new TeamService(db, authz, new ActivityRecorder(db), DefaultQuotas, sp),
             new TeamAvatarService(db, authz, sp),
             new TestCurrentUserService(userId));
     }
@@ -97,8 +126,11 @@ internal static class OrganizationsControllerTestHelpers
     public static InvitationsController CreateInvitationsController(OrganizationDbContext db, Guid userId, string? email = null)
     {
         var httpContext = new DefaultHttpContext { User = CreatePrincipal(userId, email) };
+        var authz = new OrganizationAuthorizationService(db);
+        var activity = new ActivityRecorder(db);
+        var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
         return new InvitationsController(
-            new InvitationService(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db)),
+            new InvitationService(db, authz, activity, audit, DefaultQuotas),
             new TestCurrentUserService(userId))
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
@@ -107,16 +139,51 @@ internal static class OrganizationsControllerTestHelpers
 
     public static MeController CreateMeController(OrganizationDbContext db, Guid userId)
     {
+        var httpContext = new DefaultHttpContext { User = CreatePrincipal(userId) };
         var authz = new OrganizationAuthorizationService(db);
         var activity = new ActivityRecorder(db);
-        var members = new MemberService(db, authz, activity);
+        var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
+        var members = new MemberService(db, authz, activity, audit, DefaultQuotas);
         return new MeController(new MeService(db, authz, members), new TestCurrentUserService(userId));
     }
 
     public static OrganizationService CreateOrganizationService(
         OrganizationDbContext db,
-        IBlobStorageService? blobStorageService = null) =>
-        new(db, new OrganizationAuthorizationService(db), new ActivityRecorder(db), CreateServiceProvider(blobStorageService));
+        IBlobStorageService? blobStorageService = null,
+        int retentionDays = 30)
+    {
+        var httpContext = new DefaultHttpContext();
+        return new(
+            db,
+            new OrganizationAuthorizationService(db),
+            new ActivityRecorder(db),
+            new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext }),
+            new NoOpOrganizationLifecycleNotifier(),
+            Options.Create(new OrganizationLifecycleOptions { RetentionDays = retentionDays }),
+            DefaultQuotas,
+            CreateServiceProvider(blobStorageService));
+    }
+
+    public static async Task SeedCompletedExportAsync(
+        OrganizationDbContext db,
+        Guid organizationId,
+        Guid userId,
+        DateTimeOffset? completedAt = null)
+    {
+        var at = completedAt ?? DateTimeOffset.UtcNow;
+        db.ImportExportJobs.Add(new ImportExportJob
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = organizationId,
+            Type = ImportExportJobType.Export,
+            Status = ImportExportJobStatus.Completed,
+            Format = ImportExportFormat.Csv,
+            CreatedByUserId = userId,
+            CreatedAt = at,
+            CompletedAt = at
+        });
+        await db.SaveChangesAsync();
+    }
 
     public static IOrganizationAvatarService CreateAvatarService(
         OrganizationDbContext db,
@@ -163,6 +230,7 @@ internal static class OrganizationsControllerTestHelpers
                 City = "Warsaw",
                 PostalCode = "00-001"
             },
+            Status = OrganizationStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };

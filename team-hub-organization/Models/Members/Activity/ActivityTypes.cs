@@ -33,6 +33,8 @@ public static class ActivityTypes
     public const string OrganizationUpdated = "OrganizationUpdated";
     public const string OwnershipTransferred = "OwnershipTransferred";
     public const string OrganizationDeleted = "OrganizationDeleted";
+    public const string OrganizationRestored = "OrganizationRestored";
+    public const string OrganizationStatusChanged = "OrganizationStatusChanged";
 
     public const string ImportCompleted = "ImportCompleted";
     public const string ExportCompleted = "ExportCompleted";
@@ -44,7 +46,7 @@ public static class ActivityTypes
         RoleCreated, RoleUpdated, RoleDeleted, RolePermissionsChanged, RoleMemberAssigned, RoleMemberRevoked,
         PermissionCreated, PermissionUpdated, PermissionDeleted,
         TeamCreated, TeamUpdated, TeamDeleted, TeamMemberAdded, TeamMemberUpdated, TeamMemberRemoved,
-        OrganizationUpdated, OwnershipTransferred, OrganizationDeleted,
+        OrganizationUpdated, OwnershipTransferred, OrganizationDeleted, OrganizationRestored, OrganizationStatusChanged,
         ImportCompleted, ExportCompleted
     ];
 }

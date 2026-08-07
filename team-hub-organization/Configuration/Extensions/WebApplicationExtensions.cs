@@ -1,6 +1,7 @@
 using Asp.Versioning.ApiExplorer;
 using Microsoft.EntityFrameworkCore;
 using TeamHub.Observability;
+using team_hub_organization.Configuration.Middleware;
 using team_hub_organization.Data;
 using team_hub_organization.Grpc;
 using team_hub_organization.Seeding;
@@ -42,6 +43,7 @@ public static class WebApplicationExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.UseMiddleware<IdempotencyMiddleware>();
         app.UseTeamHubUserIdLogging();
         app.UseSerilogRequestLoggingExcludingHealth();
 

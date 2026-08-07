@@ -10,6 +10,7 @@ public class Organization
     public string Email { get; set; } = "";
     public OrganizationAddress Address { get; set; } = new();
     public string? AvatarUrl { get; set; }
+    public OrganizationStatus Status { get; set; } = OrganizationStatus.Active;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

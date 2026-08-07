@@ -37,6 +37,24 @@ public sealed class OrganizationExceptionMapper : IExceptionProblemDetailsMapper
                     PreferMappedDetail: true);
                 return true;
 
+            case OrganizationQuotaExceededException ex:
+                mapping = new ExceptionMapping(
+                    StatusCodes.Status409Conflict,
+                    "Quota exceeded.",
+                    ex.Message,
+                    ProblemTypes.For("quota-exceeded"),
+                    PreferMappedDetail: true);
+                return true;
+
+            case OrganizationGoneException ex:
+                mapping = new ExceptionMapping(
+                    StatusCodes.Status410Gone,
+                    "Gone.",
+                    ex.Message,
+                    ProblemTypes.For("organization-gone"),
+                    PreferMappedDetail: true);
+                return true;
+
             case OrganizationValidationException or OrganizationAvatarValidationException:
                 mapping = new ExceptionMapping(
                     StatusCodes.Status400BadRequest,
