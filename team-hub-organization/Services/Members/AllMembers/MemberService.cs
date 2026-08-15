@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TeamHub.Kafka.Events;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.Audit;
+using team_hub_organization.Services.Messaging;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -16,7 +18,8 @@ public sealed class MemberService(
     IOrganizationAuthorizationService authz,
     IActivityRecorder activity,
     IAuditRecorder audit,
-    IOptions<OrganizationQuotasOptions> quotas) : IMemberService
+    IOptions<OrganizationQuotasOptions> quotas,
+    IOrganizationOutbox outbox) : IMemberService
 {
     public async Task<IReadOnlyList<MemberResponse>> ListAsync(
         Guid organizationId,
@@ -126,7 +129,21 @@ public sealed class MemberService(
             details: new { roles = roles.Select(r => r.Name).ToArray() },
             occurredAt: now);
 
+        outbox.EnqueueMemberAdded(
+            new OrganizationMemberAddedEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = OrganizationMemberAddedEvent.EventTypeName,
+                OccurredAt = now,
+                OrganizationId = organizationId,
+                UserId = request.UserId,
+                AddedByUserId = actorUserId,
+                RoleIds = roles.Select(r => r.Id).ToArray()
+            },
+            partitionKey: organizationId.ToString());
+
         await db.SaveChangesAsync(cancellationToken);
+
         return (await GetAsync(organizationId, request.UserId, actorUserId, cancellationToken))!;
     }
 

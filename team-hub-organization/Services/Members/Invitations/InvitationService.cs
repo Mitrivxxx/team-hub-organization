@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TeamHub.Kafka.Events;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
 using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.Audit;
+using team_hub_organization.Services.Messaging;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 
@@ -17,7 +19,8 @@ public sealed class InvitationService(
     IOrganizationAuthorizationService authz,
     IActivityRecorder activity,
     IAuditRecorder audit,
-    IOptions<OrganizationQuotasOptions> quotas) : IInvitationService
+    IOptions<OrganizationQuotasOptions> quotas,
+    IOrganizationOutbox outbox) : IInvitationService
 {
     static readonly TimeSpan DefaultExpiry = TimeSpan.FromDays(7);
 
@@ -328,6 +331,19 @@ public sealed class InvitationService(
             entityId: userId,
             details: new { roles = roleNames, via = "invitation" },
             occurredAt: now);
+
+        outbox.EnqueueMemberAdded(
+            new OrganizationMemberAddedEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = OrganizationMemberAddedEvent.EventTypeName,
+                OccurredAt = now,
+                OrganizationId = invitation.OrganizationId,
+                UserId = userId,
+                AddedByUserId = invitation.InvitedByUserId,
+                RoleIds = orgRoleIds
+            },
+            partitionKey: invitation.OrganizationId.ToString());
 
         await db.SaveChangesAsync(cancellationToken);
 

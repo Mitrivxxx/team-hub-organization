@@ -70,36 +70,38 @@
 - Keep `UseTeamHubCorrelationId` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
 - Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.
-- Swagger Try it out (demo seed): request DTO examples from `Configuration/Swagger/DemoSeedSwaggerExamples` via `DemoSeedRequestExampleSchemaFilter` (realistic bodies from seed catalog). Guid placeholder workflow lives only in the OpenAPI document description (not per-schema). Path params documented by `DemoSeedParameterOperationFilter`. Login: `JanWilk123` / `janwilk123`. **`GET /api/organizations/v1/demo/context?index=1`** (Dev/Staging only) returns seeded org/role/team/permission/invitation ids plus `addMemberUserId` (`demo00021` via auth gRPC) for copy-paste into Try it out. Create-org example uses catalog company #2 (`baltic-cloud-demo`) so it does not collide with seeded `demo-org-1`. Transfer ownership has no auto example (destructive). Avatar/import uploads use `[Consumes("multipart/form-data")]` + `[FromForm]`.
+- Swagger Try it out (demo seed): request DTO examples from `Configuration/Swagger/DemoSeedSwaggerExamples` via `DemoSeedRequestExampleSchemaFilter` (realistic bodies from seed catalog). Guid placeholder workflow lives only in the OpenAPI document description (not per-schema). Path params documented by `DemoSeedParameterOperationFilter`. Login: `JanWilk123` / `janwilk123`. **`GET /api/organizations/v1/demo/context?index=1`** (Dev/Staging only) returns seeded org/role/team/permission/invitation ids plus `addMemberUserId` (bulk auth user after `MembersPerOrganization`, via auth gRPC) for copy-paste into Try it out. Create-org example uses catalog company #2 (`baltic-cloud-demo`) so it does not collide with seeded `demo-org-1`. Transfer ownership has no auto example (destructive). Avatar/import uploads use `[Consumes("multipart/form-data")]` + `[FromForm]`.
 - Config layering:
   - `appsettings.json` — shared defaults (Jwt Issuer/Audience, Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
   - `appsettings.Development.json` / `appsettings.Staging.json` — localhost Kestrel (`5002`/`5102`), `Grpc:Auth` localhost, Seed on.
-  - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `team-hub-auth:8081`, Seed off, compact Serilog.
+  - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `srv-auth:8081`, Seed off, compact Serilog.
   - `GrpcOptions.Auth` is `[Required]` + `ValidateOnStart` (no class-level localhost default; missing config fails at startup).
-- DotNetEnv: `Env.TraversePath().Load()` runs only when `ASPNETCORE_ENVIRONMENT` is not `Production` (before `CreateBuilder`). Production uses `appsettings.Production.json` + compose `env_file` / Aspire env vars — not DotNetEnv.
+- DotNetEnv: `Env.NoClobber().TraversePath().Load()` runs only when `ASPNETCORE_ENVIRONMENT` is not `Production` (before `CreateBuilder`). `NoClobber` keeps Aspire/Compose-injected vars (e.g. dynamic Postgres port). Production uses `appsettings.Production.json` + compose `env_file` / Aspire env vars — not DotNetEnv.
 - Startup helpers in `Configuration/Extensions/WebApplicationExtensions.cs`: `RunSeedAndExitAsync` (`--seed`), `ApplyStartupSchemaAsync` (migrate + permission catalog; skipped in Testing).
 - Config layout: `Configuration/Options/` (DTOs + Swagger options), `Configuration/Middleware/` (HTTP), `Configuration/Extensions/` (DI + pipeline wiring).
-- DI registration is capability-based (same style as auth `AddRedisSessionStore`): infra adapters (`AddDatabase`, `AddJwtConfiguration`, `AddOrganizationBlobStorage`, `AddOrganizationGrpc`, `AddImportExportJobs`, `AddOrganizationLifecycle`, `AddQuotas`, `AddApiInfrastructure`) vs application (`AddApplicationServices` — domain services + import/export processor + `IAuditRecorder`).
+- DI registration is capability-based (same style as auth `AddRedisSessionStore`): infra adapters (`AddDatabase`, `AddJwtConfiguration`, `AddOrganizationBlobStorage`, `AddOrganizationGrpc`, `AddImportExportJobs`, `AddOrganizationLifecycle`, `AddQuotas`, `AddOrganizationKafka`, `AddApiInfrastructure`) vs application (`AddApplicationServices` — domain services + import/export processor + `IAuditRecorder`).
+- After member add and invitation accept, enqueue `organization.member.added` into transactional outbox (`outbox_messages`) in the same DB transaction; `OutboxDispatcherBackgroundService` publishes to Kafka topic `organization.events`.
+- Kafka config: `Kafka:BootstrapServers`, `Kafka:ClientId` (`.env.example` / Aspire `msg-kafka` / compose `msg-kafka:9092`).
 - Dev Env: HTTP only on port `5002` (`launchSettings.json`).
-- Prod Env (Docker): Host port `5002` -> container `8080`. Container `team-hub-organization-prod`.
+- Prod Env (Docker): Host port `5002` -> container `8080`. Container `srv-organization-prod`.
 - Docker healthcheck: interval `120s`, start-period `45s` (migrations + permission catalog on startup; `docker-compose.yml` + `Dockerfile`).
 - Docker build: `.env` excluded via root `.dockerignore`; publish uses `--no-restore`; runtime files owned via `COPY --chown=app:app`.
 - Source of truth: also `Seeding/` (demo seed) and `Configuration/Options/SeedOptions.cs`.
-- Demo seed (`--seed`): `Development` or `Staging` only when `Seed:Enabled=true`; migrates + seeds + exits (no Kestrel). Production blocked. Requires auth seeded and reachable at `Grpc:Auth` (resolve `OwnerUsername`).
+- Demo seed (`--seed`): `Development` or `Staging` only when `Seed:Enabled=true`; migrates + seeds + exits (no Kestrel). Production blocked. Requires auth seeded and reachable at `Grpc:Auth` (resolve `OwnerUsername`). Aspire: `seed-organization` after `seed-auth` / `seed-auth-api` — `cd aspire/TeamHub.AppHost && dotnet run -- --seed` (see `aspire/AGENT.md`).
   - Login after seed: auth user `JanWilk123` / `janwilk123` is Owner of seeded orgs.
-  - Development defaults: 1 org, 20 members (`demo00001`…), 2 Admins, 2 teams with members/job titles, 2 pending invitations; Staging: 3 orgs, 200 members, 5 Admins, 5 teams, 5 invitations (`appsettings.*.json`).
+  - Development defaults: 1 org (`demo-org-1` / Wilk Technologies), 15 members (`TeamHub.DemoSeed` NameSurname123 usernames), 2 Admins, 2 teams with members/job titles, 2 pending invitations, custom permission `org.reports.view` + role `People Ops` (assigned to one member); Staging: 3 orgs, 200 members, 5 Admins, 5 teams, 5 invitations (`appsettings.*.json`). Aspire seed forces `Seed__OrganizationCount=1`.
   - Realistic company/team catalog in `Seeding/Internal/DemoOrganizationCatalog.cs` (PL company names, Engineering/Product/… teams). Slugs stay `demo-org-{n}` for stable idempotency.
-  - Idempotent skip when slug exists. To re-seed richer data after an older empty seed: delete demo orgs or wipe `organization_db`, then run `--seed` again.
-  - Layout: `Seeding/Development|Staging/*DataSeeder`, `Seeding/Internal/OrganizationDemoBuilder` (uses `OrganizationService` / `MemberService` / `TeamService` / `InvitationService`). RBAC system roles still seeded on org create (`OrganizationRoleSeeder`). Activity rows come from those services.
+  - Idempotent skip when slug exists. To re-seed richer data after an older empty seed: delete demo orgs or wipe `organization_db` / Aspire Postgres volume, then run `--seed` again.
+  - Layout: `Seeding/DemoDataSeeder`, `Seeding/Internal/OrganizationDemoBuilder` (uses `OrganizationService` / `MemberService` / `TeamService` / `InvitationService` / `PermissionService` / `RoleService`). RBAC system roles still seeded on org create (`OrganizationRoleSeeder`). Activity rows come from those services.
 - Keep this file updated after API, port, observability, or seed changes.
 - Database: PostgreSQL schema managed via EF Core migrations in `Migrations/` (auto-applied on startup via `ApplyStartupSchemaAsync`, all envs except Testing). System permission templates cloned per org on create (no global catalog table).
 - Connection string:
-  - local dev (docker-compose.dev.yml / Aspire): `Database=organization_db` (via `.env` + DotNetEnv)
-  - docker prod compose: `Database=organizationdb` (via compose `env_file`; uncomment prod connection in `.env`, DotNetEnv not loaded)
-- Postgres container `postgres-dev` (dev) and `postgres-prod` (prod) create both auth and organization databases via init script `infrastructure/postgres/init/01-create-dbs-{dev|prod}.sql` mounted at `/docker-entrypoint-initdb.d/`.
-- Production-like docker compose requires copying `.env.example` to `.env` in this service directory before starting containers (use prod connection string comments; compose injects via `env_file`, not DotNetEnv).
-- Dev avatar storage: Azurite via `docker-compose.dev.yml` or Aspire (`BlobStorage__ConnectionString`, `BlobStorage__PublicBlobEndpoint`); `avatarUrl` in API responses is a read-only SAS URL; DB stores internal blob path.
-- Production: `BlobStorage__ConnectionString` is **required** (fail-fast at startup). Avatar/import still return `503` only in non-Production when blob is unset.
+  - Aspire: `Database=organization_db` (injected by AppHost)
+  - staging Compose: `Database=organizationdb` on `db-postgres` (from root `.env.staging` via Compose `environment`)
+- Staging Postgres init: `infrastructure/postgres/init/01-create-dbs-prod.sql` → `authdb` / `organizationdb` / `notificationdb`.
+- Staging secrets: root `.env.staging` (from `.env.staging.example`); no per-service compose `env_file`.
+- Avatar storage: Aspire or staging Azurite (`BlobStorage__ConnectionString` / Aspire `ConnectionStrings:blobs`, `BlobStorage__PublicBlobEndpoint`); Aspire pins blob port `10000` and injects connection string; library prefers `ConnectionStrings:blobs`. `avatarUrl` in API responses is a read-only SAS URL; DB stores internal blob path.
+- Production/staging: `BlobStorage__ConnectionString` is **required** (fail-fast at startup). Avatar/import still return `503` only in non-Production when blob is unset.
 
 ## CI (GitHub Actions)
 - Workflow: `.github/workflows/ci.yml`.

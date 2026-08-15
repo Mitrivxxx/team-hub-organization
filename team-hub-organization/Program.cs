@@ -9,7 +9,8 @@ if (!string.Equals(
         Environments.Production,
         StringComparison.OrdinalIgnoreCase))
 {
-    Env.TraversePath().Load();
+    // NoClobber: Aspire-injected ConnectionStrings/Kafka/Jwt win over local .env (Port=5433).
+    Env.NoClobber().TraversePath().Load();
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,7 @@ builder.Services.AddOrganizationGrpc(builder.Configuration);
 builder.Services.AddImportExportJobs();
 builder.Services.AddOrganizationLifecycle(builder.Configuration);
 builder.Services.AddQuotas(builder.Configuration);
+builder.Services.AddOrganizationKafka(builder.Configuration);
 builder.Services.AddApiInfrastructure();
 builder.Services.AddValidation();
 builder.Services.AddApplicationServices();

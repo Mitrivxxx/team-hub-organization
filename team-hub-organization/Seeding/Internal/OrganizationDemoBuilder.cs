@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TeamHub.DemoSeed;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
@@ -7,6 +8,8 @@ using team_hub_organization.Models;
 using team_hub_organization.Services.Auth;
 using team_hub_organization.Services.Members.AllMembers;
 using team_hub_organization.Services.Members.Invitations;
+using team_hub_organization.Services.Members.Permissions;
+using team_hub_organization.Services.Members.Roles;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Services.Teams;
@@ -19,10 +22,14 @@ public sealed class OrganizationDemoBuilder(
     IMemberService members,
     ITeamService teams,
     IInvitationService invitations,
+    IPermissionService permissions,
+    IRoleService roles,
     IAuthUserResolveClient authUsers,
     IOptions<SeedOptions> options,
     ILogger<OrganizationDemoBuilder> logger)
 {
+    const string CustomPermissionCode = "org.reports.view";
+    const string CustomRoleName = "People Ops";
     const int ResolveBatchSize = 100;
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
@@ -122,6 +129,68 @@ public sealed class OrganizationDemoBuilder(
             teamRoles[SystemRoleNames.Member],
             seed.PendingInvitationCount,
             cancellationToken);
+
+        await AddCustomRbacAsync(org.Id, ownerUserId, memberUserIds, cancellationToken);
+    }
+
+    async Task AddCustomRbacAsync(
+        Guid organizationId,
+        Guid ownerUserId,
+        IReadOnlyList<Guid> memberUserIds,
+        CancellationToken cancellationToken)
+    {
+        var permission = await permissions.CreateAsync(
+            organizationId,
+            new CreatePermissionRequest
+            {
+                Name = "View reports",
+                Code = CustomPermissionCode,
+                Description = "Access organization reports and dashboards (demo seed)."
+            },
+            ownerUserId,
+            cancellationToken);
+
+        var role = await roles.CreateAsync(
+            organizationId,
+            new CreateRoleRequest
+            {
+                Name = CustomRoleName,
+                Description = "People operations — reports access for HR-style workflows (demo seed).",
+                Scope = "ORG"
+            },
+            ownerUserId,
+            cancellationToken);
+
+        await roles.AddPermissionsAsync(
+            organizationId,
+            role.Id,
+            new AssignRolePermissionsRequest { PermissionIds = [permission.Id] },
+            ownerUserId,
+            cancellationToken);
+
+        var assignee = memberUserIds.FirstOrDefault();
+        if (assignee == Guid.Empty)
+        {
+            logger.LogWarning(
+                "No demo members to assign '{RoleName}' in organization {OrgId}",
+                CustomRoleName,
+                organizationId);
+            return;
+        }
+
+        await roles.AssignMemberAsync(
+            organizationId,
+            role.Id,
+            new AssignRoleMemberRequest { UserId = assignee },
+            ownerUserId,
+            cancellationToken);
+
+        logger.LogInformation(
+            "Created custom RBAC '{RoleName}' + '{PermissionCode}' (assigned to {UserId}) in organization {OrgId}",
+            CustomRoleName,
+            CustomPermissionCode,
+            assignee,
+            organizationId);
     }
 
     async Task<IReadOnlyList<Guid>> AddDemoMembersAsync(
@@ -136,15 +205,15 @@ public sealed class OrganizationDemoBuilder(
         if (memberCount <= 0)
             return [];
 
-        var usernames = Enumerable.Range(1, memberCount)
-            .Select(n => $"demo{n:D5}")
+        var usernames = DemoUserIdentityFactory
+            .CreateUsernames(memberCount, reservedUsername: options.Value.OwnerUsername)
             .ToList();
 
         var resolved = await ResolveUsernamesAsync(usernames, cancellationToken);
         if (resolved.Count == 0)
         {
             logger.LogWarning(
-                "No demo users resolved for organization {OrgId}; seed auth first (demo00001…)",
+                "No demo users resolved for organization {OrgId}; seed auth first (NameSurname123…)",
                 organizationId);
             return [];
         }

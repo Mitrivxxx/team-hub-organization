@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Seeding.Abstractions;
-using team_hub_organization.Seeding.Development;
 using team_hub_organization.Seeding.Internal;
-using team_hub_organization.Seeding.Staging;
 
 namespace team_hub_organization.Seeding;
 
@@ -27,11 +25,7 @@ public static class SeedServiceCollectionExtensions
             return services;
 
         services.AddScoped<OrganizationDemoBuilder>();
-
-        if (environment.IsDevelopment())
-            services.AddScoped<IEnvironmentDataSeeder, DevelopmentDataSeeder>();
-        else
-            services.AddScoped<IEnvironmentDataSeeder, StagingDataSeeder>();
+        services.AddScoped<IEnvironmentDataSeeder, DemoDataSeeder>();
 
         return services;
     }

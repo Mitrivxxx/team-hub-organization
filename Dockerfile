@@ -5,6 +5,8 @@ COPY aspire/TeamHub.ServiceDefaults/TeamHub.ServiceDefaults.csproj aspire/TeamHu
 COPY building-blocks/TeamHub.Observability/TeamHub.Observability.csproj building-blocks/TeamHub.Observability/
 COPY building-blocks/TeamHub.BlobStorage/TeamHub.BlobStorage.csproj building-blocks/TeamHub.BlobStorage/
 COPY building-blocks/TeamHub.GrpcContracts/TeamHub.GrpcContracts.csproj building-blocks/TeamHub.GrpcContracts/
+COPY building-blocks/TeamHub.DemoSeed/TeamHub.DemoSeed.csproj building-blocks/TeamHub.DemoSeed/
+COPY building-blocks/TeamHub.Kafka/TeamHub.Kafka.csproj building-blocks/TeamHub.Kafka/
 COPY services/team-hub-organization/team-hub-organization/team-hub-organization.csproj services/team-hub-organization/team-hub-organization/
 RUN dotnet restore services/team-hub-organization/team-hub-organization/team-hub-organization.csproj
 
@@ -12,6 +14,8 @@ COPY aspire/TeamHub.ServiceDefaults/ aspire/TeamHub.ServiceDefaults/
 COPY building-blocks/TeamHub.Observability/ building-blocks/TeamHub.Observability/
 COPY building-blocks/TeamHub.BlobStorage/ building-blocks/TeamHub.BlobStorage/
 COPY building-blocks/TeamHub.GrpcContracts/ building-blocks/TeamHub.GrpcContracts/
+COPY building-blocks/TeamHub.DemoSeed/ building-blocks/TeamHub.DemoSeed/
+COPY building-blocks/TeamHub.Kafka/ building-blocks/TeamHub.Kafka/
 COPY services/team-hub-organization/team-hub-organization/ services/team-hub-organization/team-hub-organization/
 RUN dotnet publish services/team-hub-organization/team-hub-organization/team-hub-organization.csproj -c Release -o /app/publish --no-restore
 

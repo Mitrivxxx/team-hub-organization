@@ -9,6 +9,7 @@ using team_hub_organization.Models;
 using team_hub_organization.Services.Members.Activity;
 using team_hub_organization.Services.Members.AllMembers;
 using team_hub_organization.Services.Members.Audit;
+using team_hub_organization.Services.Messaging;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Tests.Controllers;
 
@@ -16,7 +17,6 @@ namespace team_hub_organization.Tests.Grpc;
 
 public class OrganizationMemberGrpcServiceTests
 {
-
     static MemberService CreateMemberService(OrganizationDbContext db, OrganizationAuthorizationService authz)
     {
         var httpContext = new DefaultHttpContext();
@@ -25,7 +25,8 @@ public class OrganizationMemberGrpcServiceTests
             authz,
             new ActivityRecorder(db),
             new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext }),
-            Options.Create(new OrganizationQuotasOptions()));
+            Options.Create(new OrganizationQuotasOptions()),
+            new OrganizationOutbox(db));
     }
 
     [Fact]

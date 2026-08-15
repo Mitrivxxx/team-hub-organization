@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TeamHub.DemoSeed;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Data;
 using team_hub_organization.Dtos;
@@ -20,7 +21,6 @@ public sealed class DemoSeedContextService(
     IOptions<SeedOptions> seedOptions,
     ILogger<DemoSeedContextService> logger) : IDemoSeedContextService
 {
-    const string AddMemberUsername = "demo00021";
     const int SampleMemberLimit = 5;
 
     public async Task<DemoSeedContextResponse?> GetAsync(
@@ -30,7 +30,8 @@ public sealed class DemoSeedContextService(
         if (organizationIndex < 1)
             return null;
 
-        var slug = $"{seedOptions.Value.SlugPrefix}-{organizationIndex}";
+        var seed = seedOptions.Value;
+        var slug = $"{seed.SlugPrefix}-{organizationIndex}";
         var org = await db.Organizations.AsNoTracking()
             .Where(o => o.Slug == slug && o.DeletedAt == null)
             .Select(o => new { o.Id, o.Slug, o.Name })
@@ -82,30 +83,37 @@ public sealed class DemoSeedContextService(
 
         Guid? addMemberUserId = null;
         string? addMemberUsername = null;
-        try
+        var addMemberUsernameCandidate = ResolveAddMemberUsername(seed);
+        if (addMemberUsernameCandidate is not null)
         {
-            var resolved = await authUsers.ResolveUsersAsync(
-                emails: [],
-                usernames: [AddMemberUsername],
-                cancellationToken);
-            var candidate = resolved.Users.FirstOrDefault(u =>
-                string.Equals(u.Username, AddMemberUsername, StringComparison.OrdinalIgnoreCase));
-            if (candidate is not null)
+            try
             {
-                var alreadyMember = await db.OrganizationMembers.AsNoTracking()
-                    .AnyAsync(
-                        m => m.OrganizationId == org.Id && m.UserId == candidate.Id,
-                        cancellationToken);
-                if (!alreadyMember)
+                var resolved = await authUsers.ResolveUsersAsync(
+                    emails: [],
+                    usernames: [addMemberUsernameCandidate],
+                    cancellationToken);
+                var candidate = resolved.Users.FirstOrDefault(u =>
+                    string.Equals(u.Username, addMemberUsernameCandidate, StringComparison.OrdinalIgnoreCase));
+                if (candidate is not null)
                 {
-                    addMemberUserId = candidate.Id;
-                    addMemberUsername = candidate.Username;
+                    var alreadyMember = await db.OrganizationMembers.AsNoTracking()
+                        .AnyAsync(
+                            m => m.OrganizationId == org.Id && m.UserId == candidate.Id,
+                            cancellationToken);
+                    if (!alreadyMember)
+                    {
+                        addMemberUserId = candidate.Id;
+                        addMemberUsername = candidate.Username;
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Demo context: could not resolve '{Username}' via auth gRPC", AddMemberUsername);
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Demo context: could not resolve '{Username}' via auth gRPC",
+                    addMemberUsernameCandidate);
+            }
         }
 
         return new DemoSeedContextResponse
@@ -129,5 +137,15 @@ public sealed class DemoSeedContextService(
             Permissions = permissions,
             PendingInvitations = pendingInvitations
         };
+    }
+
+    static string? ResolveAddMemberUsername(SeedOptions seed)
+    {
+        // First bulk user after MembersPerOrganization is intentionally outside the seeded org.
+        var index = seed.MembersPerOrganization;
+        var usernames = DemoUserIdentityFactory.CreateUsernames(
+            index + 1,
+            reservedUsername: seed.OwnerUsername);
+        return usernames.Count > index ? usernames[index] : null;
     }
 }

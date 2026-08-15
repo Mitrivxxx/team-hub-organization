@@ -23,6 +23,7 @@ using team_hub_organization.Services.Members.Audit;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
 using team_hub_organization.Services.Members.Roles;
+using team_hub_organization.Services.Messaging;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Services.Statistics;
@@ -37,6 +38,9 @@ internal static class OrganizationsControllerTestHelpers
 
     static readonly IOptions<OrganizationLifecycleOptions> DefaultLifecycle =
         Options.Create(new OrganizationLifecycleOptions());
+
+    static MemberService CreateMemberService(OrganizationDbContext db, IOrganizationAuthorizationService authz, IActivityRecorder activity, IAuditRecorder audit) =>
+        new(db, authz, activity, audit, DefaultQuotas, new OrganizationOutbox(db));
 
     public static OrganizationDbContext CreateDbContext()
     {
@@ -92,7 +96,7 @@ internal static class OrganizationsControllerTestHelpers
         var authz = new OrganizationAuthorizationService(db);
         var activity = new ActivityRecorder(db);
         var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
-        return new(new MemberService(db, authz, activity, audit, DefaultQuotas), new TestCurrentUserService(userId));
+        return new(CreateMemberService(db, authz, activity, audit), new TestCurrentUserService(userId));
     }
 
     public static ActivityController CreateActivityController(OrganizationDbContext db, Guid userId) =>
@@ -130,7 +134,7 @@ internal static class OrganizationsControllerTestHelpers
         var activity = new ActivityRecorder(db);
         var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
         return new InvitationsController(
-            new InvitationService(db, authz, activity, audit, DefaultQuotas),
+            new InvitationService(db, authz, activity, audit, DefaultQuotas, new OrganizationOutbox(db)),
             new TestCurrentUserService(userId))
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
@@ -143,7 +147,7 @@ internal static class OrganizationsControllerTestHelpers
         var authz = new OrganizationAuthorizationService(db);
         var activity = new ActivityRecorder(db);
         var audit = new AuditRecorder(db, new HttpContextAccessor { HttpContext = httpContext });
-        var members = new MemberService(db, authz, activity, audit, DefaultQuotas);
+        var members = CreateMemberService(db, authz, activity, audit);
         return new MeController(new MeService(db, authz, members), new TestCurrentUserService(userId));
     }
 

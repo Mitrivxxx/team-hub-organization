@@ -9,7 +9,7 @@ public sealed class DemoSeedContextResponse
     public DemoSeedRolesContext Roles { get; init; } = new();
     public IReadOnlyList<DemoSeedTeamContext> Teams { get; init; } = [];
     public IReadOnlyList<Guid> SampleMemberUserIds { get; init; } = [];
-    /// <summary>User not yet in the org (demo00021+ from auth) for POST /members.</summary>
+    /// <summary>User not yet in the org (bulk auth user after MembersPerOrganization) for POST /members.</summary>
     public Guid? AddMemberUserId { get; init; }
     public string? AddMemberUsername { get; init; }
     public IReadOnlyList<DemoSeedPermissionContext> Permissions { get; init; } = [];

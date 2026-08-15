@@ -19,6 +19,7 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
     public DbSet<OrganizationAuditEvent> OrganizationAuditEvents => Set<OrganizationAuditEvent>();
     public DbSet<ImportExportJob> ImportExportJobs => Set<ImportExportJob>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,6 +198,18 @@ public class OrganizationDbContext(DbContextOptions<OrganizationDbContext> optio
             e.Property(r => r.RequestHash).HasMaxLength(64);
             e.Property(r => r.ResponseContentType).HasMaxLength(128);
             e.Property(r => r.ResponseBody).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<OutboxMessage>(e =>
+        {
+            e.ToTable("outbox_messages");
+            e.HasKey(m => m.Id);
+            e.HasIndex(m => new { m.ProcessedAt, m.CreatedAt });
+            e.Property(m => m.Topic).HasMaxLength(128).IsRequired();
+            e.Property(m => m.PartitionKey).HasMaxLength(128);
+            e.Property(m => m.EventType).HasMaxLength(128).IsRequired();
+            e.Property(m => m.Payload).HasColumnType("jsonb").IsRequired();
+            e.Property(m => m.LastError).HasMaxLength(2000);
         });
     }
 }

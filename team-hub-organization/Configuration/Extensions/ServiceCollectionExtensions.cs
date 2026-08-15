@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using TeamHub.BlobStorage;
+using TeamHub.Kafka;
 using TeamHub.Observability;
 using team_hub_organization.Configuration.Options;
 using team_hub_organization.Configuration.Swagger;
@@ -25,6 +26,7 @@ using team_hub_organization.Services.Members.ImportExport;
 using team_hub_organization.Services.Members.Invitations;
 using team_hub_organization.Services.Members.Permissions;
 using team_hub_organization.Services.Members.Roles;
+using team_hub_organization.Services.Messaging;
 using team_hub_organization.Services.Organizations;
 using team_hub_organization.Services.Rbac;
 using team_hub_organization.Services.Statistics;
@@ -146,8 +148,9 @@ public static class ServiceCollectionExtensions
         IHostEnvironment? environment = null)
     {
         var section = configuration.GetSection(BlobStorageOptions.SectionName);
-        var connectionString = section[nameof(BlobStorageOptions.ConnectionString)]
-            ?? configuration.GetConnectionString("blobs");
+        // Same precedence as AddTeamHubBlobStorage (Aspire ConnectionStrings:blobs first).
+        var connectionString = configuration.GetConnectionString("blobs")
+            ?? section[nameof(BlobStorageOptions.ConnectionString)];
 
         if (environment?.IsProduction() == true && string.IsNullOrWhiteSpace(connectionString))
         {
@@ -221,6 +224,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuditRecorder, AuditRecorder>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IOrganizationStatsService, OrganizationStatsService>();
+        return services;
+    }
+
+    public static IServiceCollection AddOrganizationKafka(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddTeamHubKafkaProducer(configuration);
+        services.AddScoped<IOrganizationOutbox, OrganizationOutbox>();
+        services.AddHostedService<OutboxDispatcherBackgroundService>();
         return services;
     }
 }

@@ -21,7 +21,7 @@ public static class DemoSeedSwaggerExamples
     /// <summary>Replace with TEAM TeamLead role id from GET /{orgId}/roles.</summary>
     public static readonly Guid PlaceholderTeamLeadRoleId = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2");
 
-    /// <summary>Replace with a seeded member userId (e.g. demo00003) from GET /{orgId}/members — or demo00021+ from auth for AddMember.</summary>
+    /// <summary>Replace with a seeded member userId from GET /{orgId}/members — or addMemberUserId from demo/context for AddMember.</summary>
     public static readonly Guid PlaceholderDemoUserId = Guid.Parse("cccccccc-cccc-4ccc-8ccc-ccccccccccc1");
 
     /// <summary>Replace with Engineering team id from GET /{orgId}/teams (seeded name Engineering).</summary>
@@ -41,7 +41,7 @@ public static class DemoSeedSwaggerExamples
            - `roles.orgMember` / `roles.orgAdmin` / `roles.teamMember` / `roles.teamLead` → request role ids
            - `teams[0].id` (Engineering) → `teamId`
            - `sampleMemberUserIds[0]` → member/team-member `userId`
-           - `addMemberUserId` (`demo00021`) → `POST /members` body (not already in org)
+           - `addMemberUserId` → `POST /members` body (not already in org)
            - `permissions[].id` (e.g. `org.teams.manage`) → assign-permission examples
            - `pendingInvitations[].id` → invitation path ids
         4. Replace Guid placeholders in request examples (`aaaaaaaa-…`, …) with values from step 3, then Execute.
@@ -51,7 +51,7 @@ public static class DemoSeedSwaggerExamples
         - Transfer ownership has no auto-filled example (destructive).
         - `demo/context` is Development/Staging only.
 
-        Seeded Dev defaults: 1 org (`demo-org-1`), 20 members, 2 Admins, teams Engineering + Product, 2 pending invitations.
+        Seeded Dev defaults: 1 org (`demo-org-1`), 15 members, 2 Admins, teams Engineering + Product, 2 pending invitations.
         """;
 
     public static JsonNode CreateOrganization()
