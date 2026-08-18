@@ -64,17 +64,18 @@
 - API versioning: URL path `/api/organizations/v1/*` (contract `1.0`; major only in URL). Source of truth: `Configuration/OrganizationApiVersions.cs` + `Controllers/OrganizationApiController` base (`Asp.Versioning.Mvc` / `ApiExplorer` 8.1.0). Swagger docs from `IApiVersionDescriptionProvider`. Additive changes stay on `v1`; breaking change adds `v2` beside deprecated `v1`.
 - Flow: frontend -> infrastructure nginx -> gateway `/api/organizations/{**catch-all}` -> this service.
 - Auth: JWT Bearer; user id from claim `sub`. Public `Jwt:Issuer`/`Jwt:Audience` in `appsettings.json`; secret `Jwt__Key` from `.env` (must match auth / `Aspire:Jwt:Key`).
-- Serilog via `AddTeamHubSerilog()` — console only (no OTLP/Grafana log sink yet).
-- Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); shared Exception/CorrelationId/UserIdLogging + `UseSerilogRequestLoggingExcludingHealth` from `TeamHub.Observability`.
+- Serilog via `AddTeamHubSerilog()` — console + OTLP sink (`localhost:4317` dev, `mon-otel:4317` Production).
+- Observability: `AddTeamHubOpenTelemetry` (traces OTLP + `/metrics`); shared Exception/CorrelationId/SessionId/UserIdLogging + `UseSerilogRequestLoggingExcludingHealth` from `TeamHub.Observability`.
 - Keep `UseTeamHubExceptionHandling` as the first middleware (RFC 9457 `ProblemDetails`; see `docs/errors.mb`).
 - Keep `UseTeamHubCorrelationId` before authentication (`X-Correlation-ID` = OpenTelemetry `TraceId`; echo on response).
+- Keep `UseTeamHubSessionId` after CorrelationId (`X-Session-ID`).
 - Keep `UseTeamHubUserIdLogging` after `UseAuthentication` / `UseAuthorization` (JWT `sub` -> `LogContext.UserId`).
 - Swagger: Development only; XML summaries on controller actions.
 - Swagger Try it out (demo seed): request DTO examples from `Configuration/Swagger/DemoSeedSwaggerExamples` via `DemoSeedRequestExampleSchemaFilter` (realistic bodies from seed catalog). Guid placeholder workflow lives only in the OpenAPI document description (not per-schema). Path params documented by `DemoSeedParameterOperationFilter`. Login: `JanWilk123` / `janwilk123`. **`GET /api/organizations/v1/demo/context?index=1`** (Dev/Staging only) returns seeded org/role/team/permission/invitation ids plus `addMemberUserId` (bulk auth user after `MembersPerOrganization`, via auth gRPC) for copy-paste into Try it out. Create-org example uses catalog company #2 (`baltic-cloud-demo`) so it does not collide with seeded `demo-org-1`. Transfer ownership has no auto example (destructive). Avatar/import uploads use `[Consumes("multipart/form-data")]` + `[FromForm]`.
 - Config layering:
   - `appsettings.json` — shared defaults (Jwt Issuer/Audience, Seed off, Serilog, Observability placeholder). No localhost Kestrel/Grpc.
   - `appsettings.Development.json` / `appsettings.Staging.json` — localhost Kestrel (`5002`/`5102`), `Grpc:Auth` localhost, Seed on.
-  - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `srv-auth:8081`, Seed off, compact Serilog.
+  - `appsettings.Production.json` — Kestrel `+:8080`/`+:8081`, `Grpc:Auth` `srv-auth:8081`, Seed off, compact Serilog + OTLP logs.
   - `GrpcOptions.Auth` is `[Required]` + `ValidateOnStart` (no class-level localhost default; missing config fails at startup).
 - DotNetEnv: `Env.NoClobber().TraversePath().Load()` runs only when `ASPNETCORE_ENVIRONMENT` is not `Production` (before `CreateBuilder`). `NoClobber` keeps Aspire/Compose-injected vars (e.g. dynamic Postgres port). Production uses `appsettings.Production.json` + compose `env_file` / Aspire env vars — not DotNetEnv.
 - Startup helpers in `Configuration/Extensions/WebApplicationExtensions.cs`: `RunSeedAndExitAsync` (`--seed`), `ApplyStartupSchemaAsync` (migrate + permission catalog; skipped in Testing).

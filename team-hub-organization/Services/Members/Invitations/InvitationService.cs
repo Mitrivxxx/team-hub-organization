@@ -332,6 +332,11 @@ public sealed class InvitationService(
             details: new { roles = roleNames, via = "invitation" },
             occurredAt: now);
 
+        var organizationName = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == invitation.OrganizationId)
+            .Select(o => o.Name)
+            .FirstAsync(cancellationToken);
+
         outbox.EnqueueMemberAdded(
             new OrganizationMemberAddedEvent
             {
@@ -339,6 +344,7 @@ public sealed class InvitationService(
                 EventType = OrganizationMemberAddedEvent.EventTypeName,
                 OccurredAt = now,
                 OrganizationId = invitation.OrganizationId,
+                OrganizationName = organizationName,
                 UserId = userId,
                 AddedByUserId = invitation.InvitedByUserId,
                 RoleIds = orgRoleIds

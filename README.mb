@@ -1,0 +1,39 @@
+# team-hub-organization
+
+## Purpose
+- Organization domain service for Team Hub.
+
+## Scope
+- Organizations, members, teams, roles, permissions, invitations, statistics, and import/export jobs.
+- JWT-protected REST API with org-scoped RBAC.
+- Internal gRPC members/activity read endpoints for internal consumers.
+
+## Runtime and ports
+- Local dev (manual): REST `http://localhost:5002`, gRPC `http://localhost:5102`.
+- Docker/runtime: REST `8080`, gRPC `8081` (host mapping typically `5002 -> 8080`).
+- Health endpoint: `GET /health`.
+- Metrics endpoint: `GET /metrics`.
+
+## API base path
+- Versioned API: `/api/organizations/v1/*`.
+- Gateway route: `/api/organizations/{**catch-all}`.
+
+## Integration contracts
+- Service flow: `frontend -> gw-nginx -> gw-api -> srv-organization`.
+- Depends on auth user identity via internal gRPC (`Grpc:Auth`).
+- Publishes organization domain events via Kafka (`organization.events`) through outbox dispatching.
+
+## Configuration
+- Main config: `team-hub-organization/appsettings*.json`.
+- Optional local env: `.env` from `.env.example` (non-Production).
+- Primary dependencies: PostgreSQL, Kafka, blob storage (avatars/import-export artifacts), auth gRPC.
+
+## Observability
+- Serilog logging.
+- OpenTelemetry traces/logs and Prometheus metrics.
+- Shared problem details and correlation/session/user logging middleware.
+
+## Related docs
+- `AGENT.md`
+- `docs/organization.mb`
+- `docs/errors.mb`

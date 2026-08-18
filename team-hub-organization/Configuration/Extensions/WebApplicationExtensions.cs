@@ -39,6 +39,7 @@ public static class WebApplicationExtensions
     {
         app.UseTeamHubExceptionHandling();
         app.UseTeamHubCorrelationId();
+        app.UseTeamHubSessionId();
 
         app.UseAuthentication();
         app.UseAuthorization();

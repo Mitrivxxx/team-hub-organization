@@ -129,6 +129,11 @@ public sealed class MemberService(
             details: new { roles = roles.Select(r => r.Name).ToArray() },
             occurredAt: now);
 
+        var organizationName = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == organizationId)
+            .Select(o => o.Name)
+            .FirstAsync(cancellationToken);
+
         outbox.EnqueueMemberAdded(
             new OrganizationMemberAddedEvent
             {
@@ -136,6 +141,7 @@ public sealed class MemberService(
                 EventType = OrganizationMemberAddedEvent.EventTypeName,
                 OccurredAt = now,
                 OrganizationId = organizationId,
+                OrganizationName = organizationName,
                 UserId = request.UserId,
                 AddedByUserId = actorUserId,
                 RoleIds = roles.Select(r => r.Id).ToArray()
